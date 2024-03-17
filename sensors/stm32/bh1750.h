@@ -1,5 +1,5 @@
 /*
- * bh1750.hpp
+ * bh1750.h
  *
  *  Created on: Mar 17, 2024
  *      Author: de
