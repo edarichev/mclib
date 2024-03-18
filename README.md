@@ -14,7 +14,7 @@ In some cases you may, of course, get a multiple definition error.
 But if you use separate header and implementation files, 
 there is a high chance that unused methods will be added in the executable and take up unnecessary space.
 
-## What's there?
+## What's here?
 
 1. BH1750 optical sensor (`bh1750.h`):
 * GY-302 board
