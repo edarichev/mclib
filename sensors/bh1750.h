@@ -8,77 +8,8 @@
 #ifndef INC_BH1750_H_
 #define INC_BH1750_H_
 
-#include "stm32f4xx_hal.h"
-
-extern I2C_HandleTypeDef hi2c1;
-extern UART_HandleTypeDef huart2;
-
-void error(const char *msg)
-{
-	HAL_UART_Transmit(&huart2, (uint8_t*) msg, strlen(msg), HAL_MAX_DELAY);
-}
-
-class Delay
-{
-public:
-	static void wait(uint32_t millisec)
-	{
-		HAL_Delay(millisec);
-	}
-
-	static uint32_t millis()
-	{
-		return HAL_GetTick();
-	}
-};
-
-class I2C
-{
-private:
-	I2C_HandleTypeDef *_hi2c = nullptr;
-public:
-	I2C(I2C_HandleTypeDef *hi2cInstance) :
-			_hi2c(hi2cInstance)
-	{
-	}
-
-	bool write(uint16_t addr, uint8_t b, uint32_t timeout) const
-	{
-		return HAL_OK == HAL_I2C_Master_Transmit(_hi2c, addr, &b, 1, timeout);
-	}
-
-	bool read(uint16_t addr, uint8_t *pBuffer, uint16_t size,
-			uint32_t timeout) const
-	{
-		return HAL_OK == HAL_I2C_Master_Receive(_hi2c, addr, pBuffer, size, timeout);
-	}
-};
-
-class I2CClient
-{
-protected:
-	I2C *_i2c = nullptr;
-
-	// Public fields. This instance may be used as Flyweight Pattern.
-public:
-	uint16_t I2CAddress = 0x00;
-	uint32_t Timeout = 300;
-protected:
-	I2CClient(I2C *i2c, uint16_t addr) :
-			_i2c(i2c), I2CAddress(addr)
-	{
-	}
-
-	inline bool write(uint8_t b) const
-	{
-		return _i2c->write(I2CAddress, b, Timeout);
-	}
-
-	inline bool read(uint8_t *pBuffer, uint16_t size) const
-	{
-		return _i2c->read(I2CAddress, pBuffer, size, Timeout);
-	}
-};
+#include <delay.h>
+#include <i2cclient.h>
 
 /**
  * BH1750  Power state
@@ -224,7 +155,7 @@ public:
 		case BH1750ResolutionMode::OneTimeLow:
 			ok = write((uint8_t) mode);
 			if (!ok)
-				error("write res mode error");
+				break;
 			_mode = mode;
 			_lastUpdateTime = Delay::millis();
 			break;
@@ -255,7 +186,6 @@ protected:
 		uint16_t value = 0;
 		uint8_t buf[2] = {0, 0};
 		if (!read(buf, sizeof(buf))) {
-			error("read error");
 			return 0xFFFF;
 		}
 		value = ((uint16_t)buf[0] << 8) | buf[1];
