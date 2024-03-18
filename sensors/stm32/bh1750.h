@@ -177,8 +177,10 @@ public:
 		v &= 0b11111;
 		v |= 0b011'00000; // Mask for low bits
 		ok = ok && write(v); // Send low bits
-		if (ok)
+		if (ok) {
 			_mtValue = mt;
+			_lastUpdateTime = Delay::millis();
+		}
 		return ok;
 	}
 
@@ -235,9 +237,8 @@ protected:
 	uint32_t getWaitTimeMs() const
 	{
 		uint32_t t = 0;
-		if ((!flags._initialized || flags._modeChanged || flags._mtRegChanged)
-			&& ChangeModeWaitTimeMs)
-			t = ChangeModeWaitTimeMs;
+		if (!flags._initialized && ChangeModeWaitTimeMs)
+			return ChangeModeWaitTimeMs;
 		switch (_mode)
 		{
 		case BH1750ResolutionMode::ContinuouslyLow:
@@ -274,6 +275,12 @@ public:
 		return ok;
 	}
 
+	/**
+	 * Returns the value in luxes.
+	 *
+	 * If sensor is not ready, the return value may be incorrect,
+	 * please check first with ready() method.
+	 */
 	float value() const
 	{
 		uint16_t lumen = 0;
@@ -289,19 +296,11 @@ public:
 		result = ((float)lumen * MTRegDefaultValue / 1.2f) / _mtValue;
 		switch (_mode)
 		{
-		case BH1750ResolutionMode::ContinuouslyHigh1:
-			break;
 		case BH1750ResolutionMode::ContinuouslyHigh2:
-			result /= 2;
-			break;
-		case BH1750ResolutionMode::ContinuouslyLow:
-			break;
-		case BH1750ResolutionMode::OneTimeHigh1:
-			break;
 		case BH1750ResolutionMode::OneTimeHigh2:
 			result /= 2;
 			break;
-		case BH1750ResolutionMode::OneTimeLow:
+		default:
 			break;
 		}
 		_lastUpdateTime = Delay::millis();
