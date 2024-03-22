@@ -20,7 +20,19 @@ public:
 	{
 		return HAL_GetTick();
 	}
+	
+	static bool exceeded(uint32_t startTime, uint32_t interval)
+	{
+		uint32_t currentTicks = Delay::millis();
+		int64_t delta = currentTicks - startTime; // to signed value
+		if (delta < 0) {
+			// overflow
+			delta = (UINT32_MAX - startTime) + currentTicks;
+		}
+		return delta > interval;
+	}
 };
+
 #else
 #error "Not supported platform"
 #endif

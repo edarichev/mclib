@@ -10,19 +10,36 @@
 
 #include <delay.h>
 #include <i2cclient.h>
+#include <spiclient.h>
+#include <type_traits>
 
+// Error status of BMP280
+// ***Query*** - sending command to sensor
+// ***Read*** - reading values from registers
+// ***Write*** - writing to registers
 enum class BMP280Error : uint8_t
 {
 	OK = 0,
-	NotInitialized = 1,
+	NotInitialized = 1, // check connection
 	StartupTimeExceeded = 2,
 	UnableToWriteResetCommand = 3,
 	NotSupportedChipID = 4,
 	InvalidChipID = 5,
-	Busy = 6,
+	Busy = 6, // may be OK, try read the sensor later
 	UnableToQueryReadyStatus = 7,
 	UnableToReadReadyStatus = 8,
 	UnableToReadCompensationCoefficients = 9,
+	ImUpdating = 10, // may be OK, try read the sensor later
+	Measuring = 11, // may be OK, try read the sensor later
+	UnableToQueryCompensationCoefficients = 12,
+	UnableToReadFilterRegistry = 13,
+	UnableToUpdateFilterRegistry = 14,
+	UnableToReadOversamplingRegistry = 15,
+	UnableToUpdateOversamplingRegistry = 16,
+	UnableToQueryChipID = 17,
+	UnableToReadChipID = 18,
+	UnableToQueryData = 19, // query for P, T error
+	UnableToReadData = 20, // reading P, T error
 };
 
 // The 7-bit device address is 111011x. The 6 MSB bits are fixed. The last bit is changeable by SDO
@@ -45,8 +62,9 @@ enum class BMP280I2CAddress : uint8_t
 enum class BMP280PowerMode : uint8_t
 {
 	Sleep = 0b00,
-	Normal = 0b01,
-	Forced = 0b10,
+	Normal = 0b11,
+	Forced = 0b01,
+	Forced2 = 0b10, // same as Forced, another value (see Table 10: mode settings, page 15)
 };
 
 // Pressure measurement can be enabled or skipped. Skipping the measurement could be useful if
@@ -58,11 +76,11 @@ enum class BMP280PowerMode : uint8_t
 enum class BMP280PressureOversampling : uint8_t
 {
 	Skipped = 0, // output set to 0x80000
-	UltraLowPower,
-	LowPower,
-	StandardResolution,
-	HighResolution,
-	UltraHighResolution,
+	UltraLowPower = 1,
+	LowPower = 2,
+	StandardResolution = 3,
+	HighResolution = 4,
+	UltraHighResolution = 5, // may be 5, 6, 7
 };
 
 // Temperature measurement can be enabled or skipped. Skipping the measurement could be
@@ -73,11 +91,11 @@ enum class BMP280PressureOversampling : uint8_t
 enum class BMP280TemperatureOversampling : uint8_t
 {
 	Skipped = 0,
-	UltraLowPower,
-	LowPower,
-	StandardResolution,
-	HighResolution,
-	UltraHighResolution,
+	UltraLowPower = 1,
+	LowPower = 2,
+	StandardResolution = 3,
+	HighResolution = 4,
+	UltraHighResolution = 5, // may be 5, 6, 7
 };
 
 // The environmental pressure is subject to many short-term changes, caused e.g. by slamming of
@@ -89,10 +107,10 @@ enum class BMP280TemperatureOversampling : uint8_t
 enum class BMP280IIRFilterMode : uint8_t
 {
 	FilterOff = 0,
-	Filter2 = 2,
-	Filter4 = 4,
-	Filter8 = 8,
-	Filter16 = 16,
+	Filter2 = 1,
+	Filter4 = 2,
+	Filter8 = 3,
+	Filter16 = 4,
 };
 
 // For normal mode, see page 16
@@ -111,32 +129,38 @@ enum class BMP280StandbyTime : uint16_t
 	Standby_4000 = 0b111, // 4000
 };
 
+// Compensation parameter storage, naming and data type; LSB/MSB
+// see page 21
+struct BMP280CDATA {
+	uint16_t dig_T1; // 0x88 / 0x89, unsigned short
+	int16_t dig_T2;  // 0x8A / 0x8B, signed short
+	int16_t dig_T3; // 0x8C / 0x8D, signed short
+	uint16_t dig_P1; // 0x8E / 0x8F, unsigned short
+	int16_t dig_P2; // 0x90 / 0x91, signed short
+	int16_t dig_P3; // 0x92 / 0x93, signed short
+	int16_t dig_P4; // 0x94 / 0x95, signed short
+	int16_t dig_P5; // 0x96 / 0x97, signed short
+	int16_t dig_P6; // 0x98 / 0x99, signed short
+	int16_t dig_P7; // 0x9A / 0x9B, signed short
+	int16_t dig_P8; // 0x9C / 0x9D, signed short
+	int16_t dig_P9; // 0x9E / 0x9F, signed short
+	int16_t reserved; // 0xA0 / 0xA1, reserved
+};
+
 /**
  * BMP280
  * DIGITAL PRESSURE SENSOR
  */
-class BMP280 : public I2CClient
+template <class TInterfaceClient = I2CClientPolling>
+class BMP280Impl : public TInterfaceClient
 {
-public:
-	// Measurement time, see page 18
-	enum MeasurementTime: uint16_t
-	{
-		StartupTimeMS = 2,
-		UltraLowPowerTimeMS = 7, // max 6.4
-		LowPowerTimeMS = 9, // max 8.7
-		StandardPowerTimeMS = 14, // max 13.3
-		HighResolutionTimeMS = 23, // max 22.5
-		UltraHighResolutionTimeMS = 44, // max 43.2
-	};
-	// IDs etc.
-	enum : uint8_t {
-		INVALID_CHIP_ID = 0xFF,
-		BMP280_CHIP_ID = 0x58, // for BMP280 must be 0x58
-		OVERSAMPLING_REGISTRY = 0xF4,
-		FILTER_REGISTRY = 0xF5,
-		START_READ_DATA_REGISTRY = 0xF7, // read from F7 to FA in BMP280
-	};
 private:
+	using BMP280_S32_t = int32_t;
+	using BMP280_U32_t = uint32_t;
+	using BMP280_S64_t = int64_t;
+	using ThisClass = BMP280Impl<TInterfaceClient>;
+private:
+	BMP280CDATA cdata {};
 	// All values are sets to 0 when reset (see 4.2 Memory map at page 24)
 	mutable uint32_t _lastUpdateTime = 0;
 	uint8_t _chipId = INVALID_CHIP_ID;
@@ -148,26 +172,533 @@ private:
 	BMP280TemperatureOversampling _tos = BMP280TemperatureOversampling::Skipped;
 	BMP280StandbyTime _standbyTime = BMP280StandbyTime::Standby_0_5;
 public:
-	BMP280(I2C *i2c, BMP280I2CAddress addr = BMP280I2CAddress::SDOToGND)
-	: I2CClient(i2c, (uint16_t)addr)
+	using CallbackInit = void(ThisClass *pbmp);
+	using CallbackDataReaded = void(ThisClass *pbmp, int32_t t, uint32_t p);
+public:
+	// Measurement time, see page 18
+	enum MeasurementTime: uint16_t
 	{
-		
+		StartupTimeMS = 2,
+		UltraLowPowerTimeMS = 7, // max 6.4
+		LowPowerTimeMS = 9, // max 8.7
+		StandardPowerTimeMS = 14, // max 13.3
+		HighResolutionTimeMS = 23, // max 22.5
+		UltraHighResolutionTimeMS = 44, // max 43.2
+	};
+	// Chip IDs
+	enum : uint8_t {
+		INVALID_CHIP_ID = 0xFF,
+		BMP280_CHIP_ID = 0x58, // for BMP280 must be 0x58
+	};
+private:
+	// Registers
+	enum : uint8_t {
+		CHIP_ID_REGISTRY = 0xD0,
+		OVERSAMPLING_REGISTRY = 0xF4,
+		FILTER_REGISTRY = 0xF5,
+		START_READ_DATA_REGISTRY = 0xF7, // read from F7 to FA in BMP280
+		RESET_REGISTRY = 0xE0,
+		RESET_REGISTRY_VALUE = 0xB6,
+		STATUS_REGISTRY = 0xF3,
+		INVALID_STATUS_REGISTRY_VALUE = 0xFF,
+	};
+public:
+	// Constructor for I2C-based clients
+	template<typename U = TInterfaceClient, std::enable_if_t<
+			std::is_base_of<I2CClientBase, U>::value, bool> = true>
+	BMP280Impl(typename U::InterfacePtrType i2c,
+			BMP280I2CAddress addr = BMP280I2CAddress::SDOToGND) :
+			TInterfaceClient(i2c, (uint16_t) addr)
+	{
+
 	}
 
-	inline BMP280Error error() const
+	template<typename U = TInterfaceClient, std::enable_if_t<
+			std::is_base_of<SPIClientBase, U>::value, bool> = true>
+	BMP280Impl(typename U::InterfacePtrType spi) :
+			TInterfaceClient(spi)
+	{
+
+	}
+
+	inline BMP280Error error()
 	{
 		return _error;
 	}
-	/**
-	 * Returns the pressure (Pa) or UINT32_MAX if an error was occurred.
-	 */
-	uint32_t pressure() const
+
+	// write() before read(), see I2C protocol for BMP280
+	template <uint8_t reg>
+	constexpr BMP280Error queryRegistryErrorCode()
 	{
-		uint32_t p = UINT32_MAX;
+		switch (reg) {
+		case CHIP_ID_REGISTRY:
+			return BMP280Error::UnableToQueryChipID;
+		case STATUS_REGISTRY:
+			return BMP280Error::UnableToQueryReadyStatus;
+		case OVERSAMPLING_REGISTRY:
+			return BMP280Error::UnableToReadOversamplingRegistry;
+		case FILTER_REGISTRY:
+			return BMP280Error::UnableToReadFilterRegistry;
+		case START_READ_DATA_REGISTRY:
+			return BMP280Error::UnableToReadData;
+		default:
+			break;
+		}
+		static_assert(reg == CHIP_ID_REGISTRY ||
+				reg == STATUS_REGISTRY ||
+				reg == OVERSAMPLING_REGISTRY ||
+				reg == FILTER_REGISTRY ||
+				reg == START_READ_DATA_REGISTRY,
+				"Invalid registry id");
+	}
+
+	template <uint8_t reg>
+	constexpr BMP280Error readRegistryErrorCode() {
+		switch (reg) {
+		case CHIP_ID_REGISTRY: return BMP280Error::UnableToQueryChipID;
+		case STATUS_REGISTRY: return BMP280Error::UnableToQueryReadyStatus;
+		case OVERSAMPLING_REGISTRY: return BMP280Error::UnableToReadOversamplingRegistry;
+		case FILTER_REGISTRY: return BMP280Error::UnableToReadFilterRegistry;
+		case START_READ_DATA_REGISTRY: return BMP280Error::UnableToReadData;
+		default: break;
+		}
+		static_assert(reg == CHIP_ID_REGISTRY ||
+				reg == STATUS_REGISTRY ||
+				reg == OVERSAMPLING_REGISTRY ||
+				reg == FILTER_REGISTRY ||
+				reg == START_READ_DATA_REGISTRY,
+				"Invalid registry id");
+	}
+
+	template <uint8_t reg>
+	constexpr BMP280Error writeRegistryErrorCode() {
+		switch (reg) {
+		case OVERSAMPLING_REGISTRY: return BMP280Error::UnableToUpdateOversamplingRegistry;
+		case FILTER_REGISTRY: return BMP280Error::UnableToUpdateFilterRegistry;
+		case START_READ_DATA_REGISTRY: return BMP280Error::UnableToReadData;
+		case RESET_REGISTRY: return BMP280Error::UnableToWriteResetCommand;
+		default: break;
+		}
+		static_assert(reg == OVERSAMPLING_REGISTRY ||
+				reg == FILTER_REGISTRY ||
+				reg == START_READ_DATA_REGISTRY ||
+				reg == RESET_REGISTRY,
+				"Invalid registry id");
+	}
+
+	bool enableSPI3Interface(bool bEnable)
+	{
+		uint8_t f5 = 0;
+		if (!getRegistry(FILTER_REGISTRY, f5)) {
+			_error = BMP280Error::UnableToReadFilterRegistry;
+			return false;
+		}
+		f5 &= 0b1111'1110; // bit 1 not used, clear only bit 0
+		if (bEnable)
+			f5 |= 1; // set bit 0 to 1 of 0xF5 registry
+		if (!setRegistry(FILTER_REGISTRY, f5)) {
+			_error = BMP280Error::UnableToUpdateFilterRegistry;
+			return false;
+		}
+		_lastUpdateTime = Delay::millis();
+		return true;
+	}
+
+	bool setIIRFilter(BMP280IIRFilterMode m)
+	{
+		uint8_t f5 = 0;
+		if (!getRegistry<FILTER_REGISTRY>(f5)) {
+			_error = BMP280Error::UnableToReadFilterRegistry;
+			return false;
+		}
+		f5 &= 0b11100011;
+		f5 |= ((uint8_t)m) << 2; // 4, 3, 2 bits of 0xF5 registry
+		if (!setRegistry<FILTER_REGISTRY>(f5)) {
+			_error = BMP280Error::UnableToUpdateFilterRegistry;
+			return false;
+		}
+		_lastUpdateTime = Delay::millis();
+		_filterMode = m;
+		return true;
+	}
+
+	bool setStandbyTime(BMP280StandbyTime t)
+	{
+		uint8_t f5 = 0;
+		if (!getRegistry<FILTER_REGISTRY>(f5)) {
+			_error = BMP280Error::UnableToReadFilterRegistry;
+			return false;
+		}
+		f5 &= 0b00011111;
+		f5 |= ((uint8_t)t) << 5; // 7, 6, 5 bits of 0xF5 registry
+		if (!setRegistry<FILTER_REGISTRY>(f5)) {
+			_error = BMP280Error::UnableToUpdateFilterRegistry;
+			return false;
+		}
+		_lastUpdateTime = Delay::millis();
+		_standbyTime = t;
+		return true;
+
+	}
+
+	bool setOversamplingRegistry(BMP280TemperatureOversampling t,
+			BMP280PressureOversampling p, BMP280PowerMode m)
+	{
+		// page 24
+		// F4 control register:
+		// osrs_t[2:0] | osrs_p[2:0] | mode[1:0]
+		uint8_t v = (((uint8_t) t) << 5) |         // temperature
+				 ((((uint8_t) p) & 0b111) << 2) |  // pressure
+				 (((uint8_t) m) & 0b11);           // power mode
+		if (!setRegistry<OVERSAMPLING_REGISTRY>(v)) {
+			_error = BMP280Error::UnableToUpdateOversamplingRegistry;
+			return false;
+		}
+		return true;
+	}
+
+	bool setTemperatureOversampling(BMP280TemperatureOversampling value)
+	{
+		uint8_t f4 = 0;
+		if (!getRegistry<OVERSAMPLING_REGISTRY>(f4)) {
+			_error = BMP280Error::UnableToReadOversamplingRegistry;
+			return false;
+		}
+		f4 &= 0b000'111'11; // temperature: 7,6,5 bits
+		f4 |= ((uint8_t)value) << 5;
+		_tos = value;
+		if (!setRegistry<OVERSAMPLING_REGISTRY>(f4)) {
+			_error = BMP280Error::UnableToUpdateOversamplingRegistry;
+			return false;
+		}
+		return true;
+	}
+
+	bool setPressureOversampling(BMP280PressureOversampling value)
+	{
+		uint8_t f4 = 0;
+		if (!getRegistry<OVERSAMPLING_REGISTRY>(f4)) {
+			_error = BMP280Error::UnableToReadOversamplingRegistry;
+			return false;
+		}
+		f4 &= 0b111'000'11; // pressure: 4,3,2 bits
+		f4 |= (((uint8_t)value) & 0b111) << 2;
+		_pos = value;
+		if (!setRegistry<OVERSAMPLING_REGISTRY>(f4)) {
+			_error = BMP280Error::UnableToReadOversamplingRegistry;
+			return false;
+		}
+		return true;
+	}
+
+	bool setPowerMode(BMP280PowerMode value)
+	{
+		uint8_t f4 = 0;
+		if (!getRegistry<OVERSAMPLING_REGISTRY>(f4)) {
+			_error = BMP280Error::UnableToReadOversamplingRegistry;
+			return false;
+		}
+		f4 &= 0b111'111'00; // power mode: 1, 0 bits
+		f4 |= ((uint8_t)value & 0b11);
+		_mode = value;
+		if (!setRegistry<OVERSAMPLING_REGISTRY>(f4)) {
+			_error = BMP280Error::UnableToReadOversamplingRegistry;
+			return false;
+		}
+		return true;
+	}
+
+
+	/**
+	 * Returns the chip ID
+	 *
+	 * The “id” register contains the chip identification number chip_id[7:0],
+	 * which is 0x58. This number can be read as soon as the device finished
+	 * the power-on-reset. (page 24)
+	 *
+	 * @returns The chip ID (0x58) or 0xFF if error was occurred.
+	 */
+	uint8_t chipId()
+	{
+		_error = BMP280Error::OK;
+		uint8_t id = 0;
+		if (!getRegistry<CHIP_ID_REGISTRY>(id))
+			return INVALID_CHIP_ID;
+		return id;
+	}
+
+	bool _initStarted = false;
+
+	bool init()
+	{
+		_initStarted = true;
+		_error = BMP280Error::OK; // will be set later if error was occurred
+		_initialized = false;
+		if (!reset()) {
+			_initStarted = false;
+			return false;
+		}
+		_chipId = chipId();
+		if (_chipId == INVALID_CHIP_ID) {
+			// error will be set inside of chipId() method
+			_initStarted = false;
+			return false;
+		}
+		if (_chipId != BMP280_CHIP_ID) {
+			_error = BMP280Error::NotSupportedChipID;
+			_initStarted = false;
+			return false;
+		}
+		if (!readCompensationCoefficients()) {
+			_initStarted = false;
+			return false;
+		}
+		_initialized = true;
+		_initStarted = false;
+		return true;
+	}
+
+	/**
+	 * Resets the sensor
+	 *
+	 * Waits some time for 0xF3 registry ready bits
+	 *
+	 * The “reset” register contains the soft reset word reset[7:0].
+	 * If the value 0xB6 is written to the register, the device is reset using
+	 * the complete power-on-reset procedure. (page 24)
+	 */
+	bool reset()
+	{
+		_error = BMP280Error::OK;
+		// The RESET command: REG, DATA
+		if (!setRegistry<RESET_REGISTRY>(RESET_REGISTRY_VALUE)) {
+			_error = BMP280Error::UnableToWriteResetCommand;
+			return false;
+		}
+		// wait for ready: 0xF3 registry
+		uint32_t currentTime = Delay::millis();
+		while (!ready()) {
+			switch (_error) {
+				case BMP280Error::OK:
+				case BMP280Error::ImUpdating:
+				case BMP280Error::Measuring:
+					break;
+				default:
+					 // error inside of ready()
+					return false;
+			}
+			// prevent the endless cycle
+			if (Delay::exceeded(currentTime, StartupTimeMS)) {
+				_error = BMP280Error::StartupTimeExceeded;
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool ready()
+	{
+		_error = BMP280Error::OK;
+		if (!_initialized) {
+			if (!_initStarted) {
+				_error = BMP280Error::NotInitialized;
+				return false;
+			}
+			// OK, init() now is called, continue init() function
+		}
+		if (!Delay::exceeded(_lastUpdateTime, getWaitTimeMS())) {
+			_error = BMP280Error::Busy;
+			return false;
+		}
+		uint8_t st = status();
+		if (_error != BMP280Error::OK)
+			return false;
+		return !(st & 0b1001);
+	}
+
+	/**
+	 * Returns the status registry value
+	 *
+	 * @returns 0xFF - error while reading data;
+	 *          0 - OK;
+	 *          X00Y - where X==1 if Measuring, Y == 1 if Updating.
+	 *          Status 0 means "sensor ready".
+	 */
+	uint8_t status()
+	{
+		_error = BMP280Error::OK;
+		uint8_t status = INVALID_STATUS_REGISTRY_VALUE; // Register 0xF3 “status”
+		bool ok = TInterfaceClient::write(STATUS_REGISTRY);
+		if (!ok) {
+			_error = BMP280Error::UnableToQueryReadyStatus;
+			return INVALID_STATUS_REGISTRY_VALUE;
+		}
+		ok = TInterfaceClient::read(&status);
+		if (!ok) {
+			_error = BMP280Error::UnableToReadReadyStatus;
+			return INVALID_STATUS_REGISTRY_VALUE;
+		}
+		// bit 1: sets 0 if copying is done
+		// bit 3: conversion is running -> 1
+		if (status & 0b1000) {
+			_error = BMP280Error::Measuring;
+			return status;
+		}
+		if (status & 1) {
+			_error = BMP280Error::ImUpdating;
+			return status;
+		}
+		return status;
+	}
+
+	/**
+	 * Reads the temperature and pressure data
+	 *
+	 * Temperature: signed 32 bit integer value with two last fractional digits: 12345 -> 123.45
+	 * Pressure: unsigned 32 bit integer in Q24.8 format (24 integer bits and 8 fractional bits).
+	 */
+	bool readData(int32_t &outTemperature, uint32_t &outPressure)
+	{
+		// To read out data after a conversion, it is strongly recommended to use a burst read and not
+		// address every register individually. This will prevent a possible mix-up of bytes belonging to
+		// different measurements and reduce interface traffic. Data readout is done by starting a burst read
+		// from 0xF7 to 0xFC. The data are read out in an unsigned 20-bit format both for pressure and for
+		// temperature.
+		const uint8_t n = 8;
+		uint8_t buf[n] {};
+		uint8_t size = 6; // TODO: set 8 for BME280 in future
+		if (!readDataRegisters(buf, size))
+			return false;
+		// see page 26-27
+		// Register 0xF7...0xF9 “press” (_msb, _lsb, _xlsb)
+		// MSB LSB XLSB
+		uint32_t adc_p = (buf[0] << 12) | (buf[1] << 4) | (buf[2] >> 4);
+		uint32_t adc_t = (buf[3] << 12) | (buf[4] << 4) | (buf[5] >> 4);
+		BMP280_S32_t t_fine = 0;
+		outTemperature =  bmp280_compensate_T_int32(adc_t, t_fine);
+		outPressure = bmp280_compensate_P_int32(adc_p, t_fine);
+		return true;
+	}
+
+	/**
+	 * Reads and returns the pressure (Pa) or UINT32_MAX if an error was occurred.
+	 */
+	inline uint32_t pressure()
+	{
+		uint32_t p = 0;
+		int32_t t = 0;
+		if (!readData(t, p))
+			return UINT32_MAX;
 		return p;
 	}
 
-	uint32_t getWaitTimeMS() const
+	/**
+	 * Reads and returns the temperature as integer with last 2 fractional digits
+	 * (1234 -> 12.34) or INT32_MAX if an error was occurred.
+	 */
+	inline int32_t temperature()
+	{
+		uint32_t p = 0;
+		int32_t t = 0;
+		if (!readData(t, p))
+			return INT32_MAX;
+		return p;
+	}
+
+	/**
+	 * Returns the pressure value as floating point: 759.67
+	 */
+	template <class TReturnType, std::enable_if_t<std::is_floating_point<TReturnType>::value, bool> = true>
+	static TReturnType mmhg(uint32_t pa) {
+		return (TReturnType)pa / 133.322387415f;
+	}
+
+	/**
+	 * Returns the pressure value as mm hg in integer XXXYY format, where YY - two digits after comma,
+	 * 75967 -> 759.67
+	 */
+	template <class TReturnType, std::enable_if_t<std::is_integral<TReturnType>::value, bool> = true>
+	static TReturnType mmhg(uint32_t pa) {
+		return (TReturnType) ((float)pa / 133.322387415f) * 100;
+	}
+private:
+	template<typename TIntClient = TInterfaceClient, std::enable_if_t<
+			std::is_base_of<I2CClientBase, TIntClient>::value, bool> = true>
+	bool readDataRegisters(uint8_t *buf, uint8_t size)
+	{
+		if (!TInterfaceClient::write(START_READ_DATA_REGISTRY)) {
+			_error = BMP280Error::UnableToQueryData;
+			return false;
+		}
+		if (!TInterfaceClient::read(buf, size)) {
+			_error = BMP280Error::UnableToReadData;
+			return false;
+		}
+		return true;
+	}
+
+	template<typename TIntClient = TInterfaceClient, std::enable_if_t<
+				std::is_base_of<SPIClientBase, TIntClient>::value, bool> = true>
+	bool readDataRegisters(uint8_t *buf, uint8_t size)
+	{
+		return true;
+	}
+
+	// protocol-specific reading compensations: I2C
+	template <typename TIntClient = TInterfaceClient,
+			std::enable_if_t<
+						std::is_base_of<I2CClientBase, TIntClient>::value, bool> = true>
+	bool readCCRegisters(uint8_t *buf, uint8_t size)
+	{
+		if (!TInterfaceClient::write(0x88)) {
+			_error = BMP280Error::UnableToQueryCompensationCoefficients;
+			return false;
+		}
+		if (!TInterfaceClient::read(buf, size)) {
+			_error = BMP280Error::UnableToReadCompensationCoefficients;
+			return false;
+		}
+		return true;
+	}
+
+	template<typename TIntClient = TInterfaceClient, std::enable_if_t<
+			std::is_base_of<SPIClientBase, TIntClient>::value, bool> = true>
+	bool readCCRegisters(uint8_t *buf, uint8_t size)
+	{
+		return true;
+	}
+
+	bool readCompensationCoefficients()
+	{
+		//The trimming parameters are programmed into the devices’ non-volatile memory (NVM) during
+		//production and cannot be altered by the customer. Each compensation word is a 16-bit signed or
+		//unsigned integer value stored in two’s complement. As the memory is organized into 8-bit words,
+		//two words must always be combined in order to represent the compensation word. The 8-bit
+		//registers are named calib00...calib25 and are stored at memory addresses 0x88...0xA1.
+		// (page 21)
+		const uint8_t maxSize = 26;
+		uint8_t buf[maxSize] = {};
+		uint8_t size = 26;
+		if (!readCCRegisters(buf, size))
+			return false;
+		// LSB - 0, MSB - 1
+		cdata.dig_T1 = (buf[1] << 8) | buf[0];
+		cdata.dig_T2 = (buf[3] << 8) | buf[2];
+		cdata.dig_T3 = (buf[5] << 8) | buf[4];
+		cdata.dig_P1 = (buf[7] << 8) | buf[6];
+		cdata.dig_P2 = (buf[9] << 8) | buf[8];
+		cdata.dig_P3 = (buf[11] << 8) | buf[10];
+		cdata.dig_P4 = (buf[13] << 8) | buf[12];
+		cdata.dig_P5 = (buf[15] << 8) | buf[14];
+		cdata.dig_P6 = (buf[17] << 8) | buf[16];
+		cdata.dig_P7 = (buf[19] << 8) | buf[18];
+		cdata.dig_P8 = (buf[21] << 8) | buf[20];
+		cdata.dig_P9 = (buf[23] << 8) | buf[22];
+		cdata.reserved = (buf[25] << 8) | buf[24];
+		return true;
+	}
+
+	uint32_t getWaitTimeMS()
 	{
 		uint32_t tt = 0, tp = 0;
 		switch (_tos)
@@ -213,310 +744,62 @@ public:
 		return tt > tp ? tt : tp; // maximum
 	}
 
-	bool enableSPI3Interface(bool bEnable)
+	template<uint8_t registry, typename TIntClient = TInterfaceClient, std::enable_if_t<
+			std::is_base_of<I2CClientBase, TIntClient>::value, bool> = true>
+	inline bool setRegistry(uint8_t newValue)
 	{
-		uint8_t f5 = 0;
-		if (!getControlRegistry(FILTER_REGISTRY, f5))
-			return false;
-		f5 &= 0b11111110; // bit 1 not used, clear bit 0
-		if (bEnable)
-			f5 |= 1; // 0 bit of 0xF5 registry
-		if (!setControlRegistry(FILTER_REGISTRY, f5))
-			return false;
-		_lastUpdateTime = Delay::millis();
-		return true;
-	}
-
-	bool setIIRFilter(BMP280IIRFilterMode m)
-	{
-		uint8_t f5 = 0;
-		if (!getControlRegistry(FILTER_REGISTRY, f5))
-			return false;
-		f5 &= 0b11100011;
-		f5 |= ((uint8_t)m) << 2; // 4, 3, 2 bits of 0xF5 registry
-		if (!setControlRegistry(FILTER_REGISTRY, f5))
-			return false;
-		_lastUpdateTime = Delay::millis();
-		_filterMode = m;
-		return true;
-	}
-
-	bool setStandbyTime(BMP280StandbyTime t)
-	{
-		uint8_t f5 = 0;
-		if (!getControlRegistry(FILTER_REGISTRY, f5))
-			return false;
-		f5 &= 0b00011111;
-		f5 |= ((uint8_t)t) << 5; // 7, 6, 5 bits of 0xF5 registry
-		if (!setControlRegistry(FILTER_REGISTRY, f5))
-			return false;
-		_lastUpdateTime = Delay::millis();
-		return true;
-
-	}
-
-	bool setF5Registry(BMP280TemperatureOversampling t,
-			BMP280PressureOversampling p, BMP280PowerMode m)
-	{
-		if (!_initialized)
-			return false;
-		if (!Delay::exceeded(_lastUpdateTime, getWaitTimeMS()))
-			return false;
-		// page 24
-		// F4 control register:
-		// osrs_t[2:0] | osrs_p[2:0] | mode[1:0]
-		uint8_t cmd[2] = {0xF4, 0};
-		cmd[1] = (((uint8_t) t) << 5) |  // temperature
-				 (((uint8_t) p) << 2) |  // pressure
-				 ((uint8_t) m);          // power mode
-		if (!write(cmd, sizeof(cmd)))
-			return false;
-		return true;
-	}
-
-	inline bool setControlRegistry(uint8_t registry, uint8_t newValue)
-	{
+		_error = BMP280Error::OK;
 		uint8_t cmd[2] = {registry, newValue};
-		return write(cmd, sizeof(cmd));
-	}
-
-	inline bool getControlRegistry(uint8_t registry, uint8_t &outValue)
-	{
-		if (!write(registry))
-			return false;
-		return read(&outValue);
-	}
-
-	bool setTemperatureOversampling(BMP280TemperatureOversampling value)
-	{
-		uint8_t f4 = 0;
-		if (!getControlRegistry(OVERSAMPLING_REGISTRY, f4))
-			return false;
-		f4 &= 0b000'111'11; // temperature: 7,6,5 bits
-		f4 |= (((uint8_t)value) & 0b111) << 5;
-		_tos = value;
-		return setControlRegistry(OVERSAMPLING_REGISTRY, f4);
-	}
-
-	bool setPressureOversampling(BMP280PressureOversampling value)
-	{
-		uint8_t f4 = 0;
-		if (!getControlRegistry(OVERSAMPLING_REGISTRY, f4))
-			return false;
-		f4 &= 0b111'000'11; // pressure: 4,3,2 bits
-		f4 |= (((uint8_t)value) & 0b111) << 2;
-		_pos = value;
-		return setControlRegistry(OVERSAMPLING_REGISTRY, f4);
-	}
-
-	bool setPowerMode(BMP280PowerMode value)
-	{
-		uint8_t f4 = 0;
-		if (!getControlRegistry(OVERSAMPLING_REGISTRY, f4))
-			return false;
-		f4 &= 0b111'111'00; // power mode: 1, 0 bits
-		f4 |= ((uint8_t)value & 0b11);
-		_mode = value;
-		return setControlRegistry(OVERSAMPLING_REGISTRY, f4);
-	}
-
-
-	/**
-	 * Returns the chip ID
-	 *
-	 * The “id” register contains the chip identification number chip_id[7:0],
-	 * which is 0x58. This number can be read as soon as the device finished
-	 * the power-on-reset. (page 24)
-	 *
-	 * @returns The chip ID (usually 0x58) or 0xFF if error was occurred.
-	 */
-	uint8_t chipId() const
-	{
-		uint8_t cmd = 0xD0; // get ID
-		if (!write(&cmd, sizeof(cmd)))
-			return INVALID_CHIP_ID;
-		if (!read(&cmd, 1))
-			return INVALID_CHIP_ID;
-		return cmd;
-	}
-
-	bool _initStarted = false;
-
-	bool init()
-	{
-		_initStarted = true;
-		_error = BMP280Error::OK; // will be set later if error was occurred
-		_initialized = false;
-		if (!reset()) {
-			_initStarted = false;
+		if (!TInterfaceClient::write(cmd, sizeof(cmd))) {
+			_error = writeRegistryErrorCode<registry>();
 			return false;
 		}
-		_chipId = chipId();
-		if (_chipId == INVALID_CHIP_ID) {
-			_error = BMP280Error::InvalidChipID;
-			_initStarted = false;
-			return false;
-		}
-		if (_chipId != BMP280_CHIP_ID) {
-			_error = BMP280Error::NotSupportedChipID;
-			_initStarted = false;
-			return false;
-		}
-		if (!readCompensationCoefficients()) {
-			_initStarted = false;
-			return false;
-		}
-		_initialized = true;
-		_initStarted = false;
 		return true;
 	}
 
-	/**
-	 * Resets the sensor
-	 *
-	 * Waits some time for 0xF3 registry ready bits
-	 *
-	 * The “reset” register contains the soft reset word reset[7:0].
-	 * If the value 0xB6 is written to the register, the device is reset using
-	 * the complete power-on-reset procedure. (page 24)
-	 */
-	bool reset()
+	template<uint8_t registry, typename TIntClient = TInterfaceClient, std::enable_if_t<
+			std::is_base_of<SPIClientBase, TIntClient>::value, bool> = true>
+	inline bool setRegistry(uint8_t newValue)
 	{
 		_error = BMP280Error::OK;
-		// The RESET command: REG, DATA
-		uint8_t cmd[2] = {0x0E, 0xB6};
-		bool ok = write(cmd, sizeof(cmd));
-		if (!ok) {
-			_error = BMP280Error::UnableToWriteResetCommand;
-			return false;
-		}
-		// wait for ready: 0xF3 registry
-		uint32_t currentTime = Delay::millis();
-		while (!ready()) {
-			if (_error != BMP280Error::OK) // error inside of ready()
-				return false;
-			// prevent the endless cycle
-			if (Delay::exceeded(currentTime, StartupTimeMS)) {
-				_error = BMP280Error::StartupTimeExceeded;
-				return false;
-			}
-		}
+
 		return true;
 	}
 
-	bool ready() const
+	template<uint8_t registry, typename TIntClient = TInterfaceClient, std::enable_if_t<
+			std::is_base_of<I2CClientBase, TIntClient>::value, bool> = true>
+	inline bool getRegistry(uint8_t &outValue)
 	{
 		_error = BMP280Error::OK;
-		if (!_initialized) {
-			if (!_initStarted) {
-				_error = BMP280Error::NotInitialized;
-				return false;
-			}
-			// OK, init() now is called, continue init() function
-		}
-		if (!Delay::exceeded(_lastUpdateTime, getWaitTimeMS())) {
-			_error = BMP280Error::Busy;
+		if (!TInterfaceClient::write(registry)) {
+			_error = queryRegistryErrorCode<registry>();
 			return false;
 		}
-		uint8_t status = 0xF3; // Register 0xF3 “status”
-		bool ok = write(status);
-		if (!ok) {
-			_error = BMP280Error::UnableToQueryReadyStatus;
+		if (!TInterfaceClient::read(&outValue)) {
+			_error = readRegistryErrorCode<registry>();
 			return false;
 		}
-		ok = read(&status);
-		if (!ok) {
-			_error = BMP280Error::UnableToReadReadyStatus;
-			return false;
-		}
-		// bit 1: sets 0 if copying is done
-		// bit 3: conversion is running -> 1
-		return !(status & 0b1001);
-	}
-
-	bool readCompensationCoefficients()
-	{
-		//The trimming parameters are programmed into the devices’ non-volatile memory (NVM) during
-		//production and cannot be altered by the customer. Each compensation word is a 16-bit signed or
-		//unsigned integer value stored in two’s complement. As the memory is organized into 8-bit words,
-		//two words must always be combined in order to represent the compensation word. The 8-bit
-		//registers are named calib00...calib25 and are stored at memory addresses 0x88...0xA1.
-		// (page 21)
-		uint8_t buf[26] = {};
-		write(0x88);
-		if (!read(buf, sizeof(buf))) {
-			_error = BMP280Error::UnableToReadCompensationCoefficients;
-			return false;
-		}
-		// LSB - 0, MSB - 1
-		cdata.dig_T1 = (buf[1] << 8) | buf[0];
-		cdata.dig_T2 = (buf[3] << 8) | buf[2];
-		cdata.dig_T3 = (buf[5] << 8) | buf[4];
-		cdata.dig_P1 = (buf[7] << 8) | buf[6];
-		cdata.dig_P2 = (buf[9] << 8) | buf[8];
-		cdata.dig_P3 = (buf[11] << 8) | buf[10];
-		cdata.dig_P4 = (buf[13] << 8) | buf[12];
-		cdata.dig_P5 = (buf[15] << 8) | buf[14];
-		cdata.dig_P6 = (buf[17] << 8) | buf[16];
-		cdata.dig_P7 = (buf[19] << 8) | buf[18];
-		cdata.dig_P8 = (buf[21] << 8) | buf[20];
-		cdata.dig_P9 = (buf[23] << 8) | buf[22];
-		cdata.reserved = (buf[25] << 8) | buf[24];
 		return true;
 	}
 
-	/**
-	 * Reads the temperature and pressure data
-	 *
-	 * Temperature: signed 32 bit integer value with two last fractional digits: 12345 -> 123.45
-	 * Pressure: unsigned 32 bit integer in Q24.8 format (24 integer bits and 8 fractional bits).
-	 */
-	bool readData(int32_t &outTemperature, uint32_t &outPressure)
+	template<uint8_t registry, typename TIntClient = TInterfaceClient, std::enable_if_t<
+			std::is_base_of<SPIClientBase, TIntClient>::value, bool> = true>
+	inline bool getRegistry(uint8_t &outValue)
 	{
-		// To read out data after a conversion, it is strongly recommended to use a burst read and not
-		// address every register individually. This will prevent a possible mix-up of bytes belonging to
-		// different measurements and reduce interface traffic. Data readout is done by starting a burst read
-		// from 0xF7 to 0xFC. The data are read out in an unsigned 20-bit format both for pressure and for
-		// temperature.
-		uint8_t buf[6] {};
-		if (!write(START_READ_DATA_REGISTRY))
-			return false;
-		uint8_t n = 6; // TODO: set 8 for BME280 in future
-		if (!read(buf, n))
-			return false;
-		// see page 26-27
-		// Register 0xF7...0xF9 “press” (_msb, _lsb, _xlsb)
-		// MSB LSB XLSB
-		uint32_t adc_p = (buf[0] << 12) | (buf[1] << 4) | (buf[2] >> 4);
-		uint32_t adc_t = (buf[3] << 12) | (buf[4] << 4) | (buf[5] >> 4);
-		BMP280_S32_t t_fine = 0;
-		outTemperature =  bmp280_compensate_T_int32(adc_t, t_fine);
-		outPressure = bmp280_compensate_P_int32(adc_p, t_fine);
-		return true;
+		_error = BMP280Error::OK;
+		outValue = 0;
+		TInterfaceClient::selectDevice();
+		bool ok = TInterfaceClient::writeRead(registry, outValue);
+		if (!ok) {
+			_error = queryRegistryErrorCode<CHIP_ID_REGISTRY>();
+		} else {
+			ok = TInterfaceClient::writeRead(registry, outValue);
+			if (!ok)
+				_error = readRegistryErrorCode<CHIP_ID_REGISTRY>();
+		}
+		TInterfaceClient::unselectDevice();
+		return ok;
 	}
-
-
-private:
-	using BMP280_S32_t = int32_t;
-	using BMP280_U32_t = uint32_t;
-	using BMP280_S64_t = int64_t;
-	// see page 21
-	// Compensation parameter storage, naming and data type; LSB/MSB
-	struct {
-		uint16_t dig_T1; // 0x88 / 0x89, unsigned short
-		int16_t dig_T2;  // 0x8A / 0x8B, signed short
-		int16_t dig_T3; // 0x8C / 0x8D, signed short
-		uint16_t dig_P1; // 0x8E / 0x8F, unsigned short
-		int16_t dig_P2; // 0x90 / 0x91, signed short
-		int16_t dig_P3; // 0x92 / 0x93, signed short
-		int16_t dig_P4; // 0x94 / 0x95, signed short
-		int16_t dig_P5; // 0x96 / 0x97, signed short
-		int16_t dig_P6; // 0x98 / 0x99, signed short
-		int16_t dig_P7; // 0x9A / 0x9B, signed short
-		int16_t dig_P8; // 0x9C / 0x9D, signed short
-		int16_t dig_P9; // 0x9E / 0x9F, signed short
-		int16_t reserved; // 0xA0 / 0xA1, reserved
-	} cdata {};
 
 	// The next functions are from BMP280 datasheet as is.
 
@@ -598,7 +881,7 @@ private:
 	}
 
 	// Returns pressure in Pa as unsigned 32 bit integer. Output value of “96386” equals 96386 Pa = 963.86 hPa
-	BMP280_U32_t bmp280_compensate_P_int32(BMP280_S32_t adc_P, BMP280_S32_t &t_fine)
+	BMP280_U32_t bmp280_compensate_P_int32(BMP280_S32_t adc_P, const BMP280_S32_t &t_fine)
 	{
 		BMP280_S32_t var1, var2;
 		BMP280_U32_t p;
@@ -630,5 +913,7 @@ private:
 		return p;
 	}
 };
+
+using BMP280 = BMP280Impl<I2CClientImpl<I2CPolling>>;
 
 #endif // _BMP280_H_INCLUDED_

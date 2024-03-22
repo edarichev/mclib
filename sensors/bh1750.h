@@ -61,6 +61,10 @@ enum class BH1750ResolutionMode : uint8_t
 	OneTimeLow = 0b0010'0011,
 };
 
+/**
+ * BH1750FVI
+ * Digital 16bit Serial Output Type Ambient Light Sensor IC
+ */
 class BH1750: public I2CClient
 {
 protected:

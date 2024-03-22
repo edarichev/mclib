@@ -2,17 +2,8 @@
 
 A library of various classes for microcontrollers.
 
-These classes are not platform-specific: they use abstractions as dependency injections, e.g. `I2C` class.
-If your platform is not present you can use most of it: simple rewrite some specific methods of these classes (`I2C`, `Delay`).
-
-All classes realized only in header files. There's a reason for this.
-
-If you use a single header file for a class, the compiler will in most cases 
-throw away unused methods and not generate code for them.
-
-In some cases you may, of course, get a multiple definition error. 
-But if you use separate header and implementation files, 
-there is a high chance that unused methods will be added in the executable and take up unnecessary space.
+These device classes are not platform-specific: they use abstractions, e.g. `I2Cxxx` class.
+If your platform is not present you can use most of it: simple rewrite some specific methods of these classes.
 
 ## What's here?
 
@@ -24,7 +15,7 @@ there is a high chance that unused methods will be added in the executable and t
 1. Define the platform macro:
 * `PLATFORM_STM32_HAL` for STM32 if you use CubeHAL
 2. Include the header file of the required class after platform-specific headers
-3. Declare an instance of the I2C class appropriate for your platform.
+3. Declare an instance of the I2C/SPI etc. protocol class appropriate for your platform.
 ```C++
 // your code:
 #include "stm32f4xx_hal.h" // for example STM32 & HAL for F4xx board
