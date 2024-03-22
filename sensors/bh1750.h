@@ -65,7 +65,8 @@ enum class BH1750ResolutionMode : uint8_t
  * BH1750FVI
  * Digital 16bit Serial Output Type Ambient Light Sensor IC
  */
-class BH1750: public I2CClient
+template <class TInterfaceClient = I2CClientPolling>
+class BH1750: public TInterfaceClient
 {
 protected:
 	// The time it takes to change modes, for example, setting Resolution Mode,
@@ -87,9 +88,9 @@ protected:
 		uint8_t _mtRegChanged : 1;
 	} flags;
 public:
-	BH1750(I2C *i2c, uint16_t addr, BH1750ResolutionMode mode =
+	BH1750(typename TInterfaceClient::InterfacePtrType i2c, uint16_t addr, BH1750ResolutionMode mode =
 			DefaultResolutionMode) :
-			I2CClient(i2c, addr), _mode(mode)
+				TInterfaceClient(i2c, addr), _mode(mode)
 	{
 		memset(&flags, 0, sizeof(flags));
 	}
@@ -105,13 +106,13 @@ public:
 		// 1. Change High bits: 7,6,5
 		uint8_t v = mt >> 5;
 		v |= 0b01000'000; // Mask for high bits
-		bool ok = write(v); // Send high bits
+		bool ok = TInterfaceClient::write(v); // Send high bits
 		if (!ok)
 			return false;
 		// 2. Change Low bits: 4,3,2,1,0
 		v &= 0b11111;
 		v |= 0b011'00000; // Mask for low bits
-		ok = ok && write(v); // Send low bits
+		ok = ok && TInterfaceClient::write(v); // Send low bits
 		if (ok) {
 			_mtValue = mt;
 			_lastUpdateTime = Delay::millis();
@@ -121,7 +122,7 @@ public:
 
 	inline bool setPowerState(BH1750PowerState s) const
 	{
-		return write((uint8_t) s);
+		return TInterfaceClient::write((uint8_t) s);
 	}
 
 	bool powerOn() const
@@ -157,7 +158,7 @@ public:
 		case BH1750ResolutionMode::OneTimeHigh1:
 		case BH1750ResolutionMode::OneTimeHigh2:
 		case BH1750ResolutionMode::OneTimeLow:
-			ok = write((uint8_t) mode);
+			ok = TInterfaceClient::write((uint8_t) mode);
 			if (!ok)
 				break;
 			_mode = mode;
@@ -189,7 +190,7 @@ protected:
 	{
 		uint16_t value = 0;
 		uint8_t buf[2] = {0, 0};
-		if (!read(buf, sizeof(buf))) {
+		if (!TInterfaceClient::read(buf, sizeof(buf))) {
 			return 0xFFFF;
 		}
 		value = ((uint16_t)buf[0] << 8) | buf[1];
@@ -249,12 +250,12 @@ public:
 enum class GY302Addr : uint16_t
 {
 	// ADDR pin set to 0 or GND: 0x23
-	ADDR_GND = 0x23,
+	ADDR_GND = 0x23 << 1, // ADDR from data sheet including R/W bit
 	// ADDR pin set to 1 or VCC: 0x5C
-	ADDR_VCC = 0x5C,
+	ADDR_VCC = 0x5C << 1,
 };
 
-class GY302: public BH1750
+class GY302: public BH1750<I2CClientPolling>
 {
 public:
 	/**
@@ -262,8 +263,8 @@ public:
 	 *
 	 * @param addr The I2C address specified in data sheet, as is, do not shift left.
 	 */
-	GY302(I2C *i2c, GY302Addr addr = GY302Addr::ADDR_GND) :
-			BH1750(i2c, ((uint16_t) addr << 1)) // ADDR from data sheet including R/W bit
+	GY302(I2CPolling *i2c, GY302Addr addr = GY302Addr::ADDR_GND) :
+			BH1750(i2c, (uint16_t) addr)
 	{
 
 	}
