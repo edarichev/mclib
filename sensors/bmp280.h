@@ -14,7 +14,7 @@
 #include <type_traits>
 
 // Error status of BMP280
-// ***Query*** - sending command to sensor
+// ***Query*** - sending a command to sensor
 // ***Read*** - reading values from registers
 // ***Write*** - writing to registers
 enum class BMP280Error : uint8_t
@@ -129,9 +129,10 @@ enum class BMP280StandbyTime : uint16_t
 	Standby_4000 = 0b111, // 4000
 };
 
-// Compensation parameter storage, naming and data type; LSB/MSB
+// For BMP280: Compensation parameter storage, naming and data type; LSB/MSB
 // see page 21
-struct BMP280CDATA {
+struct BMP280CDATA
+{
 	uint16_t dig_T1; // 0x88 / 0x89, unsigned short
 	int16_t dig_T2;  // 0x8A / 0x8B, signed short
 	int16_t dig_T3; // 0x8C / 0x8D, signed short
@@ -147,34 +148,47 @@ struct BMP280CDATA {
 	int16_t reserved; // 0xA0 / 0xA1, reserved
 };
 
+// For BME280
+struct BME280CDATA : public BMP280CDATA
+{
+	uint8_t dig_H1; // 0xA1 unsigned char
+	int16_t dig_H2; // 0xE1 / 0xE2 [7:0] / [15:8]signed short
+	uint8_t dig_H3; // 0xE3 [7:0]unsigned char
+	int16_t dig_H4; // 0xE4 / 0xE5[3:0] [11:4] / [3:0]signed short
+	int16_t dig_H5; // 0xE5[7:4] / 0xE6 [3:0] / [11:4]signed short
+	int8_t dig_H6;  // 0xE7 signed char
+};
+
 /**
  * BMP280
  * DIGITAL PRESSURE SENSOR
  */
-template <class TInterfaceClient = I2CClientPolling>
+template <class TInterfaceClient = I2CClientPolling,
+		class CDATA = BMP280CDATA>
 class BMP280Impl : public TInterfaceClient
 {
 private:
 	using BMP280_S32_t = int32_t;
 	using BMP280_U32_t = uint32_t;
 	using BMP280_S64_t = int64_t;
-	using ThisClass = BMP280Impl<TInterfaceClient>;
 private:
-	BMP280CDATA cdata {};
+	CDATA cdata {};
 	// All values are sets to 0 when reset (see 4.2 Memory map at page 24)
 	mutable uint32_t _lastUpdateTime = 0;
-	uint8_t _chipId = INVALID_CHIP_ID;
 	bool _initialized = false;
 	mutable BMP280Error _error = BMP280Error::NotInitialized;
 	BMP280IIRFilterMode _filterMode = BMP280IIRFilterMode::FilterOff;
 	BMP280PowerMode _mode = BMP280PowerMode::Sleep;
-	BMP280PressureOversampling _pos = BMP280PressureOversampling::Skipped;
-	BMP280TemperatureOversampling _tos = BMP280TemperatureOversampling::Skipped;
+	BMP280PressureOversampling _pressureOversampling = BMP280PressureOversampling::Skipped;
+	BMP280TemperatureOversampling _temperatureOversampling = BMP280TemperatureOversampling::Skipped;
 	BMP280StandbyTime _standbyTime = BMP280StandbyTime::Standby_0_5;
 public:
-	using CallbackInit = void(ThisClass *pbmp);
-	using CallbackDataReaded = void(ThisClass *pbmp, int32_t t, uint32_t p);
-public:
+	// Chip IDs
+	enum : uint8_t {
+		INVALID_CHIP_ID = 0xFF,
+		BMP280_CHIP_ID = 0x58, // for BMP280 must be 0x58
+	};
+private:
 	// Measurement time, see page 18
 	enum MeasurementTime: uint16_t
 	{
@@ -185,12 +199,6 @@ public:
 		HighResolutionTimeMS = 23, // max 22.5
 		UltraHighResolutionTimeMS = 44, // max 43.2
 	};
-	// Chip IDs
-	enum : uint8_t {
-		INVALID_CHIP_ID = 0xFF,
-		BMP280_CHIP_ID = 0x58, // for BMP280 must be 0x58
-	};
-private:
 	// Registers
 	enum : uint8_t {
 		CHIP_ID_REGISTRY = 0xD0,
@@ -213,6 +221,7 @@ public:
 
 	}
 
+	// Constructor for SPI-based clients
 	template<typename U = TInterfaceClient, std::enable_if_t<
 			std::is_base_of<SPIClientBase, U>::value, bool> = true>
 	BMP280Impl(typename U::InterfacePtrType spi) :
@@ -289,14 +298,14 @@ public:
 	bool enableSPI3Interface(bool bEnable)
 	{
 		uint8_t f5 = 0;
-		if (!getRegistry(FILTER_REGISTRY, f5)) {
+		if (!getRegistry<FILTER_REGISTRY>(f5)) {
 			_error = BMP280Error::UnableToReadFilterRegistry;
 			return false;
 		}
 		f5 &= 0b1111'1110; // bit 1 not used, clear only bit 0
 		if (bEnable)
 			f5 |= 1; // set bit 0 to 1 of 0xF5 registry
-		if (!setRegistry(FILTER_REGISTRY, f5)) {
+		if (!setRegistry<FILTER_REGISTRY>(f5)) {
 			_error = BMP280Error::UnableToUpdateFilterRegistry;
 			return false;
 		}
@@ -354,6 +363,9 @@ public:
 			_error = BMP280Error::UnableToUpdateOversamplingRegistry;
 			return false;
 		}
+		_temperatureOversampling = t;
+		_pressureOversampling = p;
+		_mode = m;
 		return true;
 	}
 
@@ -366,11 +378,11 @@ public:
 		}
 		f4 &= 0b000'111'11; // temperature: 7,6,5 bits
 		f4 |= ((uint8_t)value) << 5;
-		_tos = value;
 		if (!setRegistry<OVERSAMPLING_REGISTRY>(f4)) {
 			_error = BMP280Error::UnableToUpdateOversamplingRegistry;
 			return false;
 		}
+		_temperatureOversampling = value;
 		return true;
 	}
 
@@ -383,11 +395,11 @@ public:
 		}
 		f4 &= 0b111'000'11; // pressure: 4,3,2 bits
 		f4 |= (((uint8_t)value) & 0b111) << 2;
-		_pos = value;
 		if (!setRegistry<OVERSAMPLING_REGISTRY>(f4)) {
 			_error = BMP280Error::UnableToReadOversamplingRegistry;
 			return false;
 		}
+		_pressureOversampling = value;
 		return true;
 	}
 
@@ -400,11 +412,11 @@ public:
 		}
 		f4 &= 0b111'111'00; // power mode: 1, 0 bits
 		f4 |= ((uint8_t)value & 0b11);
-		_mode = value;
 		if (!setRegistry<OVERSAMPLING_REGISTRY>(f4)) {
 			_error = BMP280Error::UnableToReadOversamplingRegistry;
 			return false;
 		}
+		_mode = value;
 		return true;
 	}
 
@@ -438,13 +450,13 @@ public:
 			_initStarted = false;
 			return false;
 		}
-		_chipId = chipId();
-		if (_chipId == INVALID_CHIP_ID) {
+		uint8_t id = chipId();
+		if (id == INVALID_CHIP_ID) {
 			// error will be set inside of chipId() method
 			_initStarted = false;
 			return false;
 		}
-		if (_chipId != BMP280_CHIP_ID) {
+		if (id != BMP280_CHIP_ID) {
 			_error = BMP280Error::NotSupportedChipID;
 			_initStarted = false;
 			return false;
@@ -614,8 +626,8 @@ public:
 	}
 
 	/**
-	 * Returns the pressure value as mm hg in integer XXXYY format, where YY - two digits after comma,
-	 * 75967 -> 759.67
+	 * Returns the pressure value as mm hg in integer XXXYY format,
+	 * where YY - two digits after comma: 75967 -> 759.67
 	 */
 	template <class TReturnType, std::enable_if_t<std::is_integral<TReturnType>::value, bool> = true>
 	static TReturnType mmhg(uint32_t pa) {
@@ -641,7 +653,8 @@ private:
 				std::is_base_of<SPIClientBase, TIntClient>::value, bool> = true>
 	bool readDataRegisters(uint8_t *buf, uint8_t size)
 	{
-		return true;
+		// TODO: SPI
+		return false;
 	}
 
 	// protocol-specific reading compensations: I2C
@@ -665,7 +678,8 @@ private:
 			std::is_base_of<SPIClientBase, TIntClient>::value, bool> = true>
 	bool readCCRegisters(uint8_t *buf, uint8_t size)
 	{
-		return true;
+		// TODO: SPI
+		return false;
 	}
 
 	bool readCompensationCoefficients()
@@ -676,11 +690,42 @@ private:
 		//two words must always be combined in order to represent the compensation word. The 8-bit
 		//registers are named calib00...calib25 and are stored at memory addresses 0x88...0xA1.
 		// (page 21)
-		const uint8_t maxSize = 26;
+		const constexpr uint8_t maxSize = sizeof(CDATA);
 		uint8_t buf[maxSize] = {};
 		uint8_t size = 26;
 		if (!readCCRegisters(buf, size))
 			return false;
+		setCoefficients<maxSize>(buf);
+		return true;
+	}
+
+	/**
+	 * BMP280 version
+	 */
+	template <uint8_t N, class TCDATA = CDATA,
+			std::enable_if_t<std::is_same<TCDATA, BMP280CDATA>::value, bool> = true>
+	void setCoefficients(uint8_t (&buf)[N])
+	{
+		setPTCoefficients<N>(buf);
+	}
+
+	/**
+	 * BMP280 version
+	 */
+	template <uint8_t N, class TCDATA = CDATA,
+			std::enable_if_t<std::is_same<TCDATA, BME280CDATA>::value, bool> = true>
+	void setCoefficients(uint8_t (&buf)[N])
+	{
+		setPTCoefficients<N>(buf);
+		setHCoefficients<N>(buf);
+	}
+
+	/**
+	 * Sets the P & T fields of CDATA
+	 */
+	template <uint8_t N>
+	void setPTCoefficients(uint8_t (&buf)[N])
+	{
 		// LSB - 0, MSB - 1
 		cdata.dig_T1 = (buf[1] << 8) | buf[0];
 		cdata.dig_T2 = (buf[3] << 8) | buf[2];
@@ -694,14 +739,22 @@ private:
 		cdata.dig_P7 = (buf[19] << 8) | buf[18];
 		cdata.dig_P8 = (buf[21] << 8) | buf[20];
 		cdata.dig_P9 = (buf[23] << 8) | buf[22];
-		cdata.reserved = (buf[25] << 8) | buf[24];
-		return true;
 	}
 
-	uint32_t getWaitTimeMS()
+	/**
+	 * Sets the H fields of CDATA (BME280 only)
+	 */
+	template <uint8_t N, class TCDATA = CDATA,
+			std::enable_if_t<std::is_same<TCDATA, BME280CDATA>::value, bool> = true>
+	void setHCoefficients(uint8_t (&buf)[N])
+	{
+
+	}
+
+	uint32_t getWaitTimeMS() const
 	{
 		uint32_t tt = 0, tp = 0;
-		switch (_tos)
+		switch (_temperatureOversampling)
 		{
 		case BMP280TemperatureOversampling::Skipped:
 			break;
@@ -721,7 +774,7 @@ private:
 			tt = (uint8_t)MeasurementTime::UltraLowPowerTimeMS;
 			break;
 		}
-		switch (_pos)
+		switch (_pressureOversampling)
 		{
 		case BMP280PressureOversampling::Skipped:
 			break;
@@ -911,6 +964,32 @@ private:
 		var2 = (((BMP280_S32_t) (p >> 2)) * ((BMP280_S32_t) cdata.dig_P8)) >> 13;
 		p = (BMP280_U32_t) ((BMP280_S32_t) p + ((var1 + var2 + cdata.dig_P7) >> 4));
 		return p;
+	}
+
+	using BME280_S32_t = int32_t;
+	using BME280_U32_t = uint32_t;
+
+	// Returns humidity in %RH as unsigned 32 bit integer in Q22.10 format (22 integer and 10 fractional bits).
+	// Output value of “47445” represents 47445/1024 = 46.333 %RH
+	BME280_U32_t bme280_compensate_H_int32(BME280_S32_t adc_H,
+			const BME280_S32_t &t_fine)
+	{
+		BME280_S32_t v_x1_u32r;
+		v_x1_u32r = (t_fine - ((BME280_S32_t) 76800));
+		v_x1_u32r = (((((adc_H << 14) - (((BME280_S32_t) cdata.dig_H4) << 20)
+				- (((BME280_S32_t) cdata.dig_H5) * v_x1_u32r))
+				+ ((BME280_S32_t) 16384)) >> 15)
+				* (((((((v_x1_u32r * ((BME280_S32_t) cdata.dig_H6)) >> 10)
+						* (((v_x1_u32r * ((BME280_S32_t) cdata.dig_H3)) >> 11)
+								+ ((BME280_S32_t) 32768))) >> 10)
+						+ ((BME280_S32_t) 2097152)) * ((BME280_S32_t) cdata.dig_H2)
+						+ 8192) >> 14));
+		v_x1_u32r = (v_x1_u32r
+				- (((((v_x1_u32r >> 15) * (v_x1_u32r >> 15)) >> 7)
+						* ((BME280_S32_t) cdata.dig_H1)) >> 4));
+		v_x1_u32r = (v_x1_u32r < 0 ? 0 : v_x1_u32r);
+		v_x1_u32r = (v_x1_u32r > 419430400 ? 419430400 : v_x1_u32r);
+		return (BME280_U32_t) (v_x1_u32r >> 12);
 	}
 };
 
