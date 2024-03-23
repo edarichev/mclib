@@ -9,7 +9,7 @@ If your platform is not present you can use most of it: simple rewrite some spec
 
 |Image|Device|Header|Class|
 -------------------------------------
-|![BH1750 optical sensor](https://github.com/edarichev/mclib/blob/master/images/bh1750.png "BH1750 optical sensor")|BH1750 optical sensor<br>GY-302 board|`bh1750.h`|`BH1750<TInterfaceClient>`<br>`GY-302`|
+| <img src="https://github.com/edarichev/mclib/blob/master/images/bh1750.png" alt="BH1750 optical sensor" width="64" height="64" /> | BH1750 optical sensor<br>GY-302 board | `bh1750.h` | `BH1750<TInterfaceClient>`<br>`GY-302` |
 
 
 ## How to use
