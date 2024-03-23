@@ -1,19 +1,21 @@
 # mclib
 
-A library of various classes for microcontrollers.
+An experimental library of various classes for microcontrollers.
 
 These device classes are not platform-specific: they use abstractions, e.g. `I2Cxxx` class.
 If your platform is not present you can use most of it: simple rewrite some specific methods of these classes.
 
 ## What's here?
 
-1. BH1750 optical sensor (`bh1750.h`):
-* GY-302 board
+|Image|Device|Header|Class|
+-------------------------------------
+|![BH1750 optical sensor](https://github.com/edarichev/mclib/blob/master/images/bh1750.png "BH1750 optical sensor")|BH1750 optical sensor<br>GY-302 board|`bh1750.h`|`BH1750<TInterfaceClient>`<br>`GY-302`|
+
 
 ## How to use
 
 1. Define the platform macro:
-* `PLATFORM_STM32_HAL` for STM32 if you use CubeHAL
+* `PLATFORM_STM32_HAL` for STM32 if you use CubeHAL (currently only this macro platform supported)
 2. Include the header file of the required class after platform-specific headers
 3. Declare an instance of the I2C/SPI etc. protocol class appropriate for your platform.
 ```C++
