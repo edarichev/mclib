@@ -16,8 +16,8 @@ If your platform is not present you can use most of it: simple rewrite some spec
 
 ## How to use
 
-1. Define the platform macro:
-* `PLATFORM_STM32_HAL` for STM32 if you use CubeHAL (currently only this macro platform supported)
+1. Define a macro for the platform you need:
+* `PLATFORM_STM32_HAL` for STM32 if you use CubeHAL (currently only this platform is supported)
 2. Include the header file of the required class after platform-specific headers
 3. Declare an instance of the I2C/SPI etc. protocol class appropriate for your platform.
 ```C++
