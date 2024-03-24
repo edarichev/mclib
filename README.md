@@ -21,22 +21,21 @@ If your platform is not present you can use most of it: simple rewrite some spec
 2. Include the header file of the required class after platform-specific headers
 3. Declare an instance of the I2C/SPI etc. protocol class appropriate for your platform.
 ```C++
-// your code:
+// your existing code:
 #include "stm32f4xx_hal.h" // for example STM32 & HAL for F4xx board
 
 // 1. define macro here (or as a compiler option if you are using multiple source files):
 #define PLATFORM_STM32_HAL
 
 // 2. Include required headers (after "stm32f4xx_hal.h"), 
-// for example for GY302 board with BH1750 sensor
+// This example for GY302 board with BH1750 sensor
 #include <sensors/bh1750.h>
 
 // ...more code...
 
 // 3. Declare I2C instance after initialization of I2C in your platform
 I2C i2cInstance(&hi2c1);
-GY302 gy302(&i2cInstance);
-
+BH1750 gy302(&i2cInstance);
 ```
 
 ## Note for CubeIDE
