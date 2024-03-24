@@ -66,7 +66,7 @@ enum class BH1750ResolutionMode : uint8_t
  * Digital 16bit Serial Output Type Ambient Light Sensor IC
  */
 template <class TInterfaceClient = I2CClientPolling>
-class BH1750: public TInterfaceClient
+class BH1750Impl: public TInterfaceClient
 {
 protected:
 	// The time it takes to change modes, for example, setting Resolution Mode,
@@ -88,15 +88,15 @@ protected:
 		uint8_t _mtRegChanged : 1;
 	} flags;
 public:
-	BH1750(typename TInterfaceClient::InterfacePtrType i2c, uint16_t addr, BH1750ResolutionMode mode =
-			DefaultResolutionMode) :
+	BH1750Impl(typename TInterfaceClient::InterfacePtrType i2c, uint16_t addr,
+			BH1750ResolutionMode mode = DefaultResolutionMode) :
 				TInterfaceClient(i2c, addr), _mode(mode)
 	{
 		memset(&flags, 0, sizeof(flags));
 	}
 
 	/**
-	 * Sets the MTReg value
+	 * Sets the MTReg (measurement time register) value
 	 *
 	 * @param mt MTReg value [31; 254], default: 69
 	 */
@@ -125,17 +125,17 @@ public:
 		return TInterfaceClient::write((uint8_t) s);
 	}
 
-	bool powerOn() const
+	inline bool powerOn() const
 	{
 		return setPowerState(BH1750PowerState::PowerOn);
 	}
 
-	bool powerDown() const
+	inline bool powerDown() const
 	{
 		return setPowerState(BH1750PowerState::PowerDown);
 	}
 
-	bool reset() const
+	inline bool reset() const
 	{
 		return setPowerState(BH1750PowerState::Reset);
 	}
@@ -167,37 +167,6 @@ public:
 		}
 		return ok;
 	}
-
-protected:
-
-	uint32_t getWaitTimeMs() const
-	{
-		uint32_t t = 0;
-		if (!flags._initialized && ChangeModeWaitTimeMs)
-			return ChangeModeWaitTimeMs;
-		switch (_mode)
-		{
-		case BH1750ResolutionMode::ContinuouslyLow:
-		case BH1750ResolutionMode::OneTimeLow:
-			t = MeasureModeLowWaitTime;
-		default:
-			t = MeasureModeHighWaitTime;
-		}
-		return (t * _mtValue) / MTRegDefaultValue;
-	}
-
-	uint16_t getRawData() const
-	{
-		uint16_t value = 0;
-		uint8_t buf[2] = {0, 0};
-		if (!TInterfaceClient::read(buf, sizeof(buf))) {
-			return 0xFFFF;
-		}
-		value = ((uint16_t)buf[0] << 8) | buf[1];
-		return value;
-	}
-
-public:
 
 	bool ready() const
 	{
@@ -242,12 +211,39 @@ public:
 		return result;
 	}
 
+protected:
 
+	uint32_t getWaitTimeMs() const
+	{
+		uint32_t t = 0;
+		if (!flags._initialized && ChangeModeWaitTimeMs)
+			return ChangeModeWaitTimeMs;
+		switch (_mode)
+		{
+		case BH1750ResolutionMode::ContinuouslyLow:
+		case BH1750ResolutionMode::OneTimeLow:
+			t = MeasureModeLowWaitTime;
+		default:
+			t = MeasureModeHighWaitTime;
+		}
+		return (t * _mtValue) / MTRegDefaultValue;
+	}
+
+	uint16_t getRawData() const
+	{
+		uint16_t value = 0;
+		uint8_t buf[2] = {0, 0};
+		if (!TInterfaceClient::read(buf, sizeof(buf))) {
+			return 0xFFFF;
+		}
+		value = ((uint16_t)buf[0] << 8) | buf[1];
+		return value;
+	}
 };
 
 /////////////// The GY-302 Board with BH1750 sensor ///////////////////////////
 
-enum class GY302Addr : uint16_t
+enum class BH1750Addr : uint16_t
 {
 	// ADDR pin set to 0 or GND: 0x23
 	ADDR_GND = 0x23 << 1, // ADDR from data sheet including R/W bit
@@ -255,16 +251,15 @@ enum class GY302Addr : uint16_t
 	ADDR_VCC = 0x5C << 1,
 };
 
-class GY302: public BH1750<I2CClientPolling>
+class BH1750: public BH1750Impl<I2CClientPolling>
 {
 public:
 	/**
-	 * Creates a new object for GY-302 Sensor
+	 * Creates a new object for BH1750 Sensor
 	 *
-	 * @param addr The I2C address specified in data sheet, as is, do not shift left.
 	 */
-	GY302(I2CPolling *i2c, GY302Addr addr = GY302Addr::ADDR_GND) :
-			BH1750(i2c, (uint16_t) addr)
+	BH1750(I2CPolling *i2c, BH1750Addr addr = BH1750Addr::ADDR_GND) :
+			BH1750Impl(i2c, (uint16_t) addr)
 	{
 
 	}
@@ -277,7 +272,7 @@ Example for OneTimeModes:
 
 
   I2C i2cInstance(&hi2c1);
-  GY302 gy302(&i2cInstance);
+  BH1750 gy302(&i2cInstance);
 
   gy302.init();
 
