@@ -1,6 +1,9 @@
 #ifndef _LCD1602_H_INCLUDED_
 #define _LCD1602_H_INCLUDED_
 
+#include "../delay.h"
+#include "../i2cclient.h"
+
 // HAL SPECIFIC
 #if defined (PLATFORM_STM32_HAL)
 
@@ -90,11 +93,11 @@ enum class LCDTextDisplaySendFlag
 	Command = 0,
 };
 
-class LCDTextDisplay
+template <uint8_t ROWS, uint8_t COLUMNS, class TInterfaceClient = I2CClientPolling>
+class LCDTextDisplay : public TInterfaceClient
 {
 protected:
-    I2C_HandleTypeDef *_hi2c = nullptr;
-    uint8_t _addr;
+	using BaseClass = I2CClientImpl<I2CPollingModeMaster>;
 	uint8_t _rows = 0;
 	uint8_t _columns = 0;
     uint8_t _displaycontrol;
@@ -103,8 +106,9 @@ protected:
     LCDTextDisplayBacklight _backlight = LCDTextDisplayBacklight::NoBacklight;
 
 public:
-	LCDTextDisplay(I2C_HandleTypeDef *hi2c, uint8_t addr, uint8_t rows, uint8_t columns)
-			: _hi2c(hi2c), _addr(addr << 1), _rows(rows), _columns(columns)
+    
+	LCDTextDisplay(typename TInterfaceClient::InterfacePtrType i2c, uint8_t addr, uint8_t rows = ROWS, uint8_t columns = COLUMNS)
+			: TInterfaceClient(i2c, (uint16_t) (addr << 1)), _rows(rows), _columns(columns)
 	{
 		_displaycontrol = (uint8_t)LCDTextDisplayControl::CursorOff | (uint8_t)LCDTextDisplayControl::BlinkOff;
 		_displaymode = (uint8_t)LCDTextDisplayEntryMode::Left | (uint8_t)LCDTextDisplayEntryMode::DisplayShiftDecrement;
@@ -134,7 +138,7 @@ public:
 		command((uint8_t)LCDTextDisplayCommand::FunctiionSet |
 				(uint8_t)LCDTextDisplayFunctionSet::Mode4Bit |
 				_fontSize |
-				(uint8_t)LCDTextDisplayFunctionSet::Line1);
+				(uint8_t)LCDTextDisplayFunctionSet::Line2);
 		// the number of the display lines and character font can not be changed afterwards
 		// display off
 		command((uint8_t)LCDTextDisplayControl::DisplayOff |
@@ -200,7 +204,7 @@ public:
 		command((uint8_t)LCDTextDisplayCommand::SetDDRAMAddr | (col + row_offsets[row]));
 	}
 
-	void write(const char *str)
+	void print(const char *str)
 	{
 		while(*str) {
 			send((uint8_t)(*str), LCDTextDisplaySendFlag::Data);
@@ -215,37 +219,30 @@ protected:
 
 	bool send(uint8_t data, LCDTextDisplaySendFlag flags)
 	{
-		HAL_StatusTypeDef res;
-		res = HAL_I2C_IsDeviceReady(_hi2c, _addr, 10, HAL_MAX_DELAY);
-		if(res != HAL_OK)
-			return false;
-
 		// We can use only 4 bits to data transfer
 		// therefore we split one byte into 2 parts
 		uint8_t up = data & 0xF0; // upper part
 		uint8_t lo = (data << 4) & 0xF0; // lower part
 
-		uint8_t data_arr[4];
+		uint8_t buf[4];
 		// msb [7654] - data, lsb[3210] - configuration
-		data_arr[0] = up | (uint8_t)flags | (uint8_t)_backlight | (uint8_t)LCDTextDisplayControlBit::E;
+		buf[0] = up | (uint8_t)flags | (uint8_t)_backlight | (uint8_t)LCDTextDisplayControlBit::E;
 		// дублирование сигнала, на выводе Е в этот раз 0
 		// send again, this tine EN is zero
-		data_arr[1] = up | (uint8_t)flags | (uint8_t)_backlight;
+		buf[1] = up | (uint8_t)flags | (uint8_t)_backlight;
 		//The same for configuration
-		data_arr[2] = lo | (uint8_t)flags | (uint8_t)_backlight | (uint8_t)LCDTextDisplayControlBit::E;
-		data_arr[3] = lo | (uint8_t)flags | (uint8_t)_backlight;
+		buf[2] = lo | (uint8_t)flags | (uint8_t)_backlight | (uint8_t)LCDTextDisplayControlBit::E;
+		buf[3] = lo | (uint8_t)flags | (uint8_t)_backlight;
 
-		res = HAL_I2C_Master_Transmit(_hi2c, _addr, data_arr, sizeof(data_arr), HAL_MAX_DELAY);
-
-		delay(5);
-
-		return res == HAL_OK;
+		return TInterfaceClient::write(buf, sizeof(buf));
 	}
 
 	void delay(uint32_t t)
 	{
-		HAL_Delay(t);
+		Delay::wait(t);
 	}
 };
+
+using LCD2004 = LCDTextDisplay<4, 20, I2CClientPolling>;
 
 #endif // _LCD1602_H_INCLUDED_

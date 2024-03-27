@@ -12,6 +12,7 @@
 #include <i2cclient.h>
 #include <spiclient.h>
 #include <type_traits>
+#include <limits>
 
 // Error status of BMP280
 // ***Query*** - sending a command to sensor
@@ -643,9 +644,8 @@ public:
 	 * Returns the pressure value as mm hg in integer XXXYY format,
 	 * where YY - two digits after comma: 75967 -> 759.67
 	 */
-	template <class TReturnType, std::enable_if_t<std::is_integral<TReturnType>::value, bool> = true>
-	static TReturnType mmhg(uint32_t pa) {
-		return (TReturnType) ((float)pa / 133.322387415f) * 100;
+	static uint32_t mmhg(uint32_t pa) {
+		return (uint32_t) ((float)pa * 100.0F / 133.322387415f);
 	}
 protected:
 	template<typename TIntClient = TInterfaceClient, std::enable_if_t<
