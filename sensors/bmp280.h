@@ -167,15 +167,16 @@ template <class TInterfaceClient = I2CClientPolling,
 		class CDATA = BMP280CDATA>
 class BMP280Impl : public TInterfaceClient
 {
-private:
+protected:
 	using BMP280_S32_t = int32_t;
 	using BMP280_U32_t = uint32_t;
 	using BMP280_S64_t = int64_t;
-private:
+protected:
 	CDATA cdata {};
 	// All values are sets to 0 when reset (see 4.2 Memory map at page 24)
 	mutable uint32_t _lastUpdateTime = 0;
 	bool _initialized = false;
+	bool _initStarted = false;
 	mutable BMP280Error _error = BMP280Error::NotInitialized;
 	BMP280IIRFilterMode _filterMode = BMP280IIRFilterMode::FilterOff;
 	BMP280PowerMode _mode = BMP280PowerMode::Sleep;
@@ -188,7 +189,7 @@ public:
 		INVALID_CHIP_ID = 0xFF,
 		BMP280_CHIP_ID = 0x58, // for BMP280 must be 0x58
 	};
-private:
+protected:
 	// Measurement time, see page 18
 	enum MeasurementTime: uint16_t
 	{
@@ -297,6 +298,7 @@ public:
 
 	bool enableSPI3Interface(bool bEnable)
 	{
+		_error = BMP280Error::OK;
 		uint8_t f5 = 0;
 		if (!getRegistry<FILTER_REGISTRY>(f5)) {
 			_error = BMP280Error::UnableToReadFilterRegistry;
@@ -315,6 +317,7 @@ public:
 
 	bool setIIRFilter(BMP280IIRFilterMode m)
 	{
+		_error = BMP280Error::OK;
 		uint8_t f5 = 0;
 		if (!getRegistry<FILTER_REGISTRY>(f5)) {
 			_error = BMP280Error::UnableToReadFilterRegistry;
@@ -439,7 +442,18 @@ public:
 		return id;
 	}
 
-	bool _initStarted = false;
+	bool checkChipId(uint8_t id)
+	{
+		if (id == INVALID_CHIP_ID) {
+			return false;
+		}
+		if (id != BMP280_CHIP_ID) {
+			_error = BMP280Error::NotSupportedChipID;
+			_initStarted = false;
+			return false;
+		}
+		return true;
+	}
 
 	bool init()
 	{
@@ -451,13 +465,8 @@ public:
 			return false;
 		}
 		uint8_t id = chipId();
-		if (id == INVALID_CHIP_ID) {
-			// error will be set inside of chipId() method
-			_initStarted = false;
-			return false;
-		}
-		if (id != BMP280_CHIP_ID) {
-			_error = BMP280Error::NotSupportedChipID;
+		// error will be set inside of chipId() method
+		if (!checkChipId(id)) {
 			_initStarted = false;
 			return false;
 		}
@@ -581,6 +590,12 @@ public:
 		uint8_t size = 6; // TODO: set 8 for BME280 in future
 		if (!readDataRegisters(buf, size))
 			return false;
+		calculateValues(buf, outTemperature, outPressure);
+		return true;
+	}
+
+	inline void calculateValues(uint8_t *buf, int32_t &outTemperature, uint32_t &outPressure)
+	{
 		// see page 26-27
 		// Register 0xF7...0xF9 “press” (_msb, _lsb, _xlsb)
 		// MSB LSB XLSB
@@ -589,7 +604,6 @@ public:
 		BMP280_S32_t t_fine = 0;
 		outTemperature =  bmp280_compensate_T_int32(adc_t, t_fine);
 		outPressure = bmp280_compensate_P_int32(adc_p, t_fine);
-		return true;
 	}
 
 	/**
@@ -633,7 +647,7 @@ public:
 	static TReturnType mmhg(uint32_t pa) {
 		return (TReturnType) ((float)pa / 133.322387415f) * 100;
 	}
-private:
+protected:
 	template<typename TIntClient = TInterfaceClient, std::enable_if_t<
 			std::is_base_of<I2CClientBase, TIntClient>::value, bool> = true>
 	bool readDataRegisters(uint8_t *buf, uint8_t size)
@@ -710,17 +724,6 @@ private:
 	}
 
 	/**
-	 * BMP280 version
-	 */
-	template <uint8_t N, class TCDATA = CDATA,
-			std::enable_if_t<std::is_same<TCDATA, BME280CDATA>::value, bool> = true>
-	void setCoefficients(uint8_t (&buf)[N])
-	{
-		setPTCoefficients<N>(buf);
-		setHCoefficients<N>(buf);
-	}
-
-	/**
 	 * Sets the P & T fields of CDATA
 	 */
 	template <uint8_t N>
@@ -739,16 +742,6 @@ private:
 		cdata.dig_P7 = (buf[19] << 8) | buf[18];
 		cdata.dig_P8 = (buf[21] << 8) | buf[20];
 		cdata.dig_P9 = (buf[23] << 8) | buf[22];
-	}
-
-	/**
-	 * Sets the H fields of CDATA (BME280 only)
-	 */
-	template <uint8_t N, class TCDATA = CDATA,
-			std::enable_if_t<std::is_same<TCDATA, BME280CDATA>::value, bool> = true>
-	void setHCoefficients(uint8_t (&buf)[N])
-	{
-
 	}
 
 	uint32_t getWaitTimeMS() const
@@ -815,7 +808,7 @@ private:
 	inline bool setRegistry(uint8_t newValue)
 	{
 		_error = BMP280Error::OK;
-
+		// TODO: after buying the new sensor
 		return true;
 	}
 
@@ -965,15 +958,85 @@ private:
 		p = (BMP280_U32_t) ((BMP280_S32_t) p + ((var1 + var2 + cdata.dig_P7) >> 4));
 		return p;
 	}
+};
 
+/**
+ * BME280 Sensor
+ *
+ * The next references are applied to BME280 datasheet
+ */
+template <class TInterfaceClient = I2CClientPolling, class CDATA = BME280CDATA>
+class BME280Impl : public BMP280Impl<TInterfaceClient, CDATA>
+{
+protected:
 	using BME280_S32_t = int32_t;
 	using BME280_U32_t = uint32_t;
+	using BME280_S64_t = int64_t;
+	using BaseClass = BMP280Impl<TInterfaceClient, CDATA>;
+public:
+	// Constructor for I2C-based clients
+	template<typename U = TInterfaceClient, std::enable_if_t<
+			std::is_base_of<I2CClientBase, U>::value, bool> = true>
+	BME280Impl(typename U::InterfacePtrType i2c,
+			BMP280I2CAddress addr = BMP280I2CAddress::SDOToGND) :
+			BaseClass(i2c, addr)
+	{
 
+	}
+
+	// Constructor for SPI-based clients
+	template<typename U = TInterfaceClient, std::enable_if_t<
+			std::is_base_of<SPIClientBase, U>::value, bool> = true>
+	BME280Impl(typename U::InterfacePtrType spi) : BaseClass(spi)
+	{
+
+	}
+protected:
+	// Returns temperature in DegC, resolution is 0.01 DegC. Output value of “5123” equals 51.23 DegC.
+	// t_fine carries fine temperature as global value
+	BME280_S32_t t_fine;
+	BME280_S32_t BME280_compensate_T_int32(BME280_S32_t adc_T, BME280_S32_t &t_fine)
+	{
+		CDATA &cdata = BaseClass::cdata;
+		BME280_S32_t var1, var2, T;
+		var1 = ((((adc_T >> 3) - ((BME280_S32_t) cdata.dig_T1 << 1)))
+				* ((BME280_S32_t) cdata.dig_T2)) >> 11;
+		var2 = (((((adc_T >> 4) - ((BME280_S32_t) cdata.dig_T1))
+				* ((adc_T >> 4) - ((BME280_S32_t) cdata.dig_T1))) >> 12)
+				* ((BME280_S32_t) cdata.dig_T3)) >> 14;
+		t_fine = var1 + var2;
+		T = (t_fine * 5 + 128) >> 8;
+		return T;
+	}
+	// Returns pressure in Pa as unsigned 32 bit integer in Q24.8 format (24 integer bits and 8 fractional bits).
+	// Output value of “24674867” represents 24674867/256 = 96386.2 Pa = 963.862 hPa
+	BME280_U32_t BME280_compensate_P_int64(BME280_S32_t adc_P, const BME280_S32_t &t_fine)
+	{
+		CDATA &cdata = BaseClass::cdata;
+		BME280_S64_t var1, var2, p;
+		var1 = ((BME280_S64_t)t_fine) - 128000;
+		var2 = var1 * var1 * (BME280_S64_t)cdata.dig_P6;
+		var2 = var2 + ((var1*(BME280_S64_t)cdata.dig_P5)<<17);
+		var2 = var2 + (((BME280_S64_t)cdata.dig_P4)<<35);
+		var1 = ((var1 * var1 * (BME280_S64_t)cdata.dig_P3)>>8) + ((var1 * (BME280_S64_t)cdata.dig_P2)<<12);
+		var1 = (((((BME280_S64_t)1)<<47)+var1))*((BME280_S64_t)cdata.dig_P1)>>33;
+		if (var1 == 0)
+		{
+			return 0; // avoid exception caused by division by zero
+		}
+		p = 1048576-adc_P;
+		p = (((p<<31)-var2)*3125)/var1;
+		var1 = (((BME280_S64_t)cdata.dig_P9) * (p>>13) * (p>>13)) >> 25;
+		var2 = (((BME280_S64_t)cdata.dig_P8) * p) >> 19;
+		p = ((p + var1 + var2) >> 8) + (((BME280_S64_t)cdata.dig_P7)<<4);
+		return (BME280_U32_t)p;
+	}
 	// Returns humidity in %RH as unsigned 32 bit integer in Q22.10 format (22 integer and 10 fractional bits).
 	// Output value of “47445” represents 47445/1024 = 46.333 %RH
 	BME280_U32_t bme280_compensate_H_int32(BME280_S32_t adc_H,
 			const BME280_S32_t &t_fine)
 	{
+		CDATA &cdata = BaseClass::cdata;
 		BME280_S32_t v_x1_u32r;
 		v_x1_u32r = (t_fine - ((BME280_S32_t) 76800));
 		v_x1_u32r = (((((adc_H << 14) - (((BME280_S32_t) cdata.dig_H4) << 20)
@@ -991,8 +1054,135 @@ private:
 		v_x1_u32r = (v_x1_u32r > 419430400 ? 419430400 : v_x1_u32r);
 		return (BME280_U32_t) (v_x1_u32r >> 12);
 	}
+	/**
+	 * Sets the H fields of CDATA (BME280 only)
+	 */
+	template <uint8_t N, class TCDATA = CDATA,
+			std::enable_if_t<std::is_same<TCDATA, BME280CDATA>::value, bool> = true>
+	void setHCoefficients(uint8_t (&buf)[N])
+	{
+		// TODO: add after buying
+	}
+
+	/**
+	 * BME280 version
+	 */
+	template <uint8_t N, class TCDATA = CDATA,
+			std::enable_if_t<std::is_same<TCDATA, BME280CDATA>::value, bool> = true>
+	void setCoefficients(uint8_t (&buf)[N])
+	{
+		BaseClass::setPTCoefficients<N>(buf);
+		setHCoefficients<N>(buf);
+	}
 };
 
-using BMP280 = BMP280Impl<I2CClientImpl<I2CPolling>>;
+using BMP280 = BMP280Impl<I2CClientImpl<I2CPollingModeMaster>>;
+using BME280 = BME280Impl<I2CClientImpl<I2CPollingModeMaster>>;
+
+#if 0
+class BMP280
+{
+	BMP280CDATA cdata {};
+	// All values are sets to 0 when reset (see 4.2 Memory map at page 24)
+	mutable uint32_t _lastUpdateTime = 0;
+	bool _initialized = false;
+	bool _initStarted = false;
+	mutable BMP280Error _error = BMP280Error::NotInitialized;
+	BMP280IIRFilterMode _filterMode = BMP280IIRFilterMode::FilterOff;
+	BMP280PowerMode _mode = BMP280PowerMode::Sleep;
+	BMP280PressureOversampling _pressureOversampling = BMP280PressureOversampling::Skipped;
+	BMP280TemperatureOversampling _temperatureOversampling = BMP280TemperatureOversampling::Skipped;
+	BMP280StandbyTime _standbyTime = BMP280StandbyTime::Standby_0_5;
+public:
+	BMP280(I2CPollingModeMaster *i2c)
+	{
+
+	}
+	bool ready()
+	{
+		return true;
+	}
+	uint8_t error()
+	{
+		return 0;
+	}
+	/**
+	 * Returns the pressure value as floating point: 759.67
+	 */
+	template <class TReturnType, std::enable_if_t<std::is_floating_point<TReturnType>::value, bool> = true>
+	static TReturnType mmhg(uint32_t pa) {
+		return (TReturnType)pa / 133.322387415f;
+	}
+
+	/**
+	 * Returns the pressure value as mm hg in integer XXXYY format,
+	 * where YY - two digits after comma: 75967 -> 759.67
+	 */
+	template <class TReturnType, std::enable_if_t<std::is_integral<TReturnType>::value, bool> = true>
+	static TReturnType mmhg(uint32_t pa) {
+		return (TReturnType) ((float)pa / 133.322387415f) * 100;
+	}
+	bool setIIRFilter(BMP280IIRFilterMode m)
+	{
+		return true;
+	}
+
+	bool setStandbyTime(BMP280StandbyTime t)
+	{
+
+		return true;
+
+	}
+
+	bool setOversamplingRegistry(BMP280TemperatureOversampling t,
+			BMP280PressureOversampling p, BMP280PowerMode m)
+	{
+		return true;
+	}
+
+	bool setTemperatureOversampling(BMP280TemperatureOversampling value)
+	{
+
+		return true;
+	}
+
+	bool setPressureOversampling(BMP280PressureOversampling value)
+	{
+
+		return true;
+	}
+
+	bool setPowerMode(BMP280PowerMode value)
+	{
+
+		return true;
+	}
+
+
+	/**
+	 * Returns the chip ID
+	 *
+	 * The “id” register contains the chip identification number chip_id[7:0],
+	 * which is 0x58. This number can be read as soon as the device finished
+	 * the power-on-reset. (page 24)
+	 *
+	 * @returns The chip ID (0x58) or 0xFF if error was occurred.
+	 */
+	uint8_t chipId()
+	{
+		return 0x58;
+	}
+	bool readData(int32_t &outTemperature, uint32_t &outPressure)
+	{
+		outTemperature = 0;
+		outPressure = 0;
+		return true;
+	}
+	bool init()
+	{
+		return true;
+	}
+};
+#endif
 
 #endif // _BMP280_H_INCLUDED_

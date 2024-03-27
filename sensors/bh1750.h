@@ -241,8 +241,6 @@ protected:
 	}
 };
 
-/////////////// The GY-302 Board with BH1750 sensor ///////////////////////////
-
 enum class BH1750Addr : uint16_t
 {
 	// ADDR pin set to 0 or GND: 0x23
@@ -258,7 +256,7 @@ public:
 	 * Creates a new object for BH1750 Sensor
 	 *
 	 */
-	BH1750(I2CPolling *i2c, BH1750Addr addr = BH1750Addr::ADDR_GND) :
+	BH1750(I2CPollingModeMaster *i2c, BH1750Addr addr = BH1750Addr::ADDR_GND) :
 			BH1750Impl(i2c, (uint16_t) addr)
 	{
 
@@ -266,34 +264,3 @@ public:
 };
 
 #endif /* INC_BH1750_H_ */
-
-/*
-Example for OneTimeModes:
-
-
-  I2C i2cInstance(&hi2c1);
-  BH1750 gy302(&i2cInstance);
-
-  gy302.init();
-
-  HAL_UART_Transmit(&huart2, (uint8_t*) "START\r\n", 7, HAL_MAX_DELAY);
-  gy302.setResolution(BH1750ResolutionMode::OneTimeHigh2);
-  gy302.setMTReg(BH1750::MTRegDefaultValue * 2);
-  HAL_Delay(200);
-
-  while (1)
-  {
-	  if (gy302.ready()) {
-		  float lx = gy302.value();
-		  char msg[80];
-		  sprintf(msg, "%f (lx)\r\n", lx);
-		  HAL_UART_Transmit(&huart2, (uint8_t*) msg, strlen(msg), HAL_MAX_DELAY);
-		  HAL_Delay(1000);
-		  // resend measurement instruction
-		  // for continuous modes not required:
-		  gy302.setResolution(BH1750ResolutionMode::OneTimeHigh2);
-		  gy302.setMTReg(BH1750::MTRegDefaultValue * 2);
-	  }
-  }
-
- */

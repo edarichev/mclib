@@ -37,10 +37,10 @@ protected:
 			_hi2c(hi2cInstance) {}
 };
 
-class I2CPolling : public I2C
+class I2CPollingModeMaster : public I2C
 {
 public:
-	I2CPolling(I2C_HandleTypeDef *hi2cInstance) :
+	I2CPollingModeMaster(I2C_HandleTypeDef *hi2cInstance) :
 			I2C(hi2cInstance)
 	{
 	}
@@ -138,6 +138,6 @@ protected:
 	}
 };
 
-using I2CClientPolling = I2CClientImpl<I2CPolling>;
+using I2CClientPolling = I2CClientImpl<I2CPollingModeMaster>;
 
 #endif // _I2CCLIENT_H_INCLUDED_
