@@ -4,34 +4,6 @@
 #include "../delay.h"
 #include "../i2cclient.h"
 
-// HAL SPECIFIC
-#if defined (PLATFORM_STM32_HAL)
-
-// abstraction
-class LCDCommandInterface
-{
-public:
-};
-
-#if defined (HAL_I2C_MODULE_ENABLED)
-
-class LCDI2CCommandInterface : public LCDCommandInterface
-{
-private:
-	I2C_HandleTypeDef *_hi2c = nullptr;
-	uint8_t _addr {};
-public:
-	LCDI2CCommandInterface(I2C_HandleTypeDef *hi2c, uint8_t addr) : _hi2c(hi2c), _addr(addr << 1) {}
-};
-
-#else  // defined (HAL_I2C_MODULE_ENABLED)
-#error "The macro HAL_I2C_MODULE_ENABLED must be defined in stm32XXxx_hal_conf.h"
-#endif
-
-#else
-
-#endif
-
 enum class LCDTextDisplayControlBit
 {
 	E = 0b0000'0100,
@@ -244,5 +216,6 @@ protected:
 };
 
 using LCD2004 = LCDTextDisplay<4, 20, I2CClientPolling>;
+using LCD1602 = LCDTextDisplay<2, 16, I2CClientPolling>;
 
 #endif // _LCD1602_H_INCLUDED_

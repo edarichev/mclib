@@ -1,4 +1,9 @@
-// misc draft functions
+/**
+ * Misc draft functions for 24LC64 EEPROM
+ * 
+ * @author Evgeny Darichev
+ * @date 28.03.2024
+ */
 #ifndef _24LC64_H_INCLUDED_
 #define _24LC64_H_INCLUDED_
 
