@@ -18,6 +18,7 @@ If your platform is not present you can use most of it: simple rewrite some spec
 
 ## How to use
 
+All classes are used according to a uniform scheme:
 1. Define a macro for the platform you need:
 * `PLATFORM_STM32_HAL` for STM32 if you use CubeHAL (currently only this platform is supported)
 2. Include the header file of the required class after platform-specific headers
@@ -36,8 +37,9 @@ If your platform is not present you can use most of it: simple rewrite some spec
 // ...more code...
 
 // 3. Declare I2C instance after initialization of I2C in your platform
-I2C i2cInstance(&hi2c1);
+I2CPollingModeMaster i2cInstance(&hi2c1);
 BH1750 gy302(&i2cInstance);
+// other code
 ```
 
 ## Note for CubeIDE
