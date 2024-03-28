@@ -11,7 +11,8 @@ If your platform is not present you can use most of it: simple rewrite some spec
 ------|------|------|-----|
 | <img src="https://github.com/edarichev/mclib/blob/master/images/bh1750.png" alt="BH1750 optical sensor" width="64" height="64" /> | BH1750 optical sensor | `bh1750.h` | `BH1750` |
 | <img src="https://github.com/edarichev/mclib/blob/master/images/bmp280.png" alt="BMP280 temperature and pressure sensor" width="64" height="64" /> | BMP280 temperature and pressure sensor | `bmp280.h` | `BMP280` |
-| <img src="https://github.com/edarichev/mclib/blob/master/images/lcd2004.png" alt="LCD2004 display" width="64" height="64" /> | LCD2004/1602 displays | `lcd1602.h` | `LCDTextDisplay` |
+| <img src="https://github.com/edarichev/mclib/blob/master/images/lcd2004.png" alt="LCD2004 display" width="64" height="64" /> | LCD2004/1602 displays | `display/lcd1602.h` | `LCDTextDisplay` |
+| <img src="https://github.com/edarichev/mclib/blob/master/images/24lc64.png" alt="24LC64" width="64" height="64" /> | 24LC64 EEPROM | `eeprom/24LC64.h` | `memtest_24LC64` function for memory test |
 
 
 
