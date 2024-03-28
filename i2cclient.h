@@ -60,31 +60,19 @@ public:
 	{
 		return HAL_OK == HAL_I2C_Master_Receive(_hi2c, addr, pBuffer, size, timeout);
 	}
-};
 
-class I2CDMA : public I2C
-{
-public:
-	I2CDMA(I2C_HandleTypeDef *hi2cInstance) :
-			I2C(hi2cInstance)
-	{
-	}
-
-	inline bool write(uint16_t addr, uint8_t b, uint32_t timeout) const
-	{
-		UNUSED(timeout);
-		return write(addr, &b, 1, timeout);
-	}
-
-	inline bool write(uint16_t addr, uint8_t *b, uint16_t size, uint32_t timeout) const
-	{
-		return HAL_OK == HAL_I2C_Master_Transmit_DMA(_hi2c, addr, b, size);
-	}
-
-	inline bool read(uint16_t addr, uint8_t *pBuffer, uint16_t size,
+	bool memRead(uint16_t addr, uint16_t memAddr, uint8_t *buf, uint16_t size,
 			uint32_t timeout) const
 	{
-		return HAL_OK == HAL_I2C_Master_Receive_DMA(_hi2c, addr, pBuffer, size);
+		return HAL_OK == HAL_I2C_Mem_Read(_hi2c, addr, memAddr,
+				I2C_MEMADD_SIZE_8BIT, buf, size, timeout);
+	}
+
+	bool memWrite(uint16_t addr, uint16_t memAddr, uint8_t *buf, uint16_t size,
+			uint32_t timeout) const
+	{
+		return HAL_OK == HAL_I2C_Mem_Write(_hi2c, addr, memAddr,
+				I2C_MEMADD_SIZE_8BIT, buf, size, timeout);
 	}
 };
 
@@ -135,6 +123,16 @@ protected:
 	inline bool read(uint8_t *b) const
 	{
 		return _i2c->read(I2CAddress, b, 1, Timeout);
+	}
+
+	inline bool memRead(uint16_t memAddr, uint8_t *buf, uint16_t size) const
+	{
+		return _i2c->memRead(I2CAddress, memAddr, buf, size, Timeout);
+	}
+
+	inline bool memWrite(uint16_t memAddr, uint8_t *buf, uint16_t size) const
+	{
+		return _i2c->memWrite(I2CAddress, memAddr, buf, size, Timeout);
 	}
 };
 
