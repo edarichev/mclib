@@ -10,6 +10,7 @@
 
 #include "../i2cclient.h"
 #include <ctime>
+#include <climits>
 
 struct DS3231DateTime
 {
@@ -26,16 +27,16 @@ public:
 	uint8_t year = 0;
 	uint8_t century = 0;
 	// if 12-hour format: 1-pm, 0-am
-	uint8_t ampm = 0;
+	bool pm = false;
 	// time in 12-hour format
-	uint8_t asAMPM = 0;
+	bool asAMPM = false;
 
 	void toAMPM()
 	{
 		if (asAMPM)
 			return; // already AMPM
 		asAMPM = 1;
-		ampm = hour > 12 ? 1 : 0;
+		pm = hour > 12 ? 1 : 0;
 		if (hour > 12)
 			hour -= 12;
 	}
@@ -45,9 +46,9 @@ public:
 		if (!asAMPM)
 			return;
 		asAMPM = 0;
-		if (ampm)
+		if (pm)
 			hour += 12;
-		ampm = 0;
+		pm = 0;
 	}
 };
 
@@ -68,6 +69,7 @@ public:
 	enum : uint8_t {
 		DS3231_I2CAddress = 0x68,
 		EEPROM_I2CAddress = 0x57,
+		ERROR_VALUE = 0xFF,
 	};
 public:
 	template <typename U = TInterfaceClient>
@@ -80,7 +82,7 @@ public:
 	DS3231DateTime dateTime()
 	{
 		DS3231DateTime t;
-		uint8_t buf[7]; // 7 bytes for alarm and clock data
+		uint8_t buf[7]; // 7 bytes for clock data
 		if (!TInterfaceClient::memRead(0x00, buf, sizeof(buf))) {
 			return t;
 		}
@@ -91,7 +93,7 @@ public:
 		t.asAMPM = (hb & 0b0100'0000) ? 1 : 0;
 		t.hour = FROM_BCD(0b0000'1111 & hb);
 		uint8_t hadd = 0b0001'0000 & hb ? 10 : 0; // +10?
-		t.ampm = (t.asAMPM && (0b0010'0000 & hb)) ? 1 : 0;
+		t.pm = (t.asAMPM && (0b0010'0000 & hb)) ? 1 : 0;
 		if (!t.asAMPM && 0b0010'0000 & hb) // 20-hour bit
 			hadd = 20;
 		t.hour += hadd;
@@ -106,10 +108,10 @@ public:
 
 	bool setDateTime(const DS3231DateTime &t)
 	{
-		uint8_t buf[7]; // 7 bytes for alarm and clock data
+		uint8_t buf[7];
 		buf[0] = TO_BCD(t.second);
 		buf[1] = TO_BCD(t.minute);
-		buf[2] = packHour(t.hour, t.asAMPM, t.ampm);
+		buf[2] = packHour(t.hour, t.asAMPM, t.pm);
 		buf[3] = t.dayOfWeek;
 		buf[4] = TO_BCD(t.day);
 		buf[5] = TO_BCD(t.month) | (t.century << 7);
@@ -151,6 +153,102 @@ public:
 			reg += 12;
 		reg = packHour(reg, false, false);
 		return setRegister(HOUR_REGISTER, reg);
+	}
+
+	/**
+	 * Returns seconds or 0xFF if error
+	 */
+	uint8_t second()
+	{
+		uint8_t reg;
+		if (!getRegister(SECONDS_REGISTER, reg))
+			return ERROR_VALUE;
+		return FROM_BCD(reg);
+	}
+
+	uint8_t minute()
+	{
+		uint8_t reg;
+		if (!getRegister(MINUTE_REGISTER, reg))
+			return ERROR_VALUE;
+		return FROM_BCD(reg);
+	}
+
+	/**
+	 * Returns hour correspond to AM/PM or 24-hour mode. No 12/24 conversions performed.
+	 */
+	uint8_t hour()
+	{
+		uint8_t reg;
+		if (!getRegister(HOUR_REGISTER, reg))
+			return ERROR_VALUE;
+		if ((reg & 0b0100'0000) == 0)
+			return FROM_BCD(reg); // as is, 24 h mode
+		return FROM_BCD(reg & 0b0001'1111);
+	}
+
+	/**
+	 * If in 12-hour mode returns true if PM.
+	 */
+	bool pm()
+	{
+		uint8_t reg;
+		if (!getRegister(HOUR_REGISTER, reg))
+			return false;
+		if ((reg & 0b0100'0000) == 0)
+			return false; // as is, 24 h mode
+		return reg & 0b0010'0000;
+	}
+
+	/**
+	 * If in 12-hour mode returns true.
+	 */
+	bool asAMPM()
+	{
+		uint8_t reg;
+		if (!getRegister(HOUR_REGISTER, reg))
+			return false;
+		return reg & 0b0100'0000;
+	}
+
+	uint8_t day()
+	{
+		uint8_t reg;
+		if (!getRegister(DAYOFMONTH_REGISTER, reg))
+			return ERROR_VALUE;
+		return FROM_BCD(reg);
+	}
+
+	uint8_t dayOfWeek()
+	{
+		uint8_t reg;
+		if (!getRegister(DAYOFWEEK_REGISTER, reg))
+			return ERROR_VALUE;
+		return FROM_BCD(reg);
+	}
+
+	uint8_t month()
+	{
+		uint8_t reg;
+		if (!getRegister(MONTH_REGISTER, reg))
+			return ERROR_VALUE;
+		return FROM_BCD(0b0001'1111 & reg);
+	}
+
+	uint8_t year()
+	{
+		uint8_t reg;
+		if (!getRegister(YEAR_REGISTER, reg))
+			return ERROR_VALUE;
+		return FROM_BCD(reg);
+	}
+
+	uint8_t century()
+	{
+		uint8_t reg;
+		if (!getRegister(MONTH_REGISTER, reg))
+			return ERROR_VALUE;
+		return reg >> 7;
 	}
 
 	bool setHour(uint8_t hour, bool asAMPM, bool pm)
@@ -347,6 +445,225 @@ public:
 		buf[2] = 0b1000'0000 | (0b0000'0111 & TO_BCD(dayOfWeek));
 		return updateAlarm2(buf);
 	}
+
+	/**
+	 * Indicates that the oscillator either is stopped or was
+	 * stopped for some period and may be used to judge the
+	 * validity of the timekeeping data. (see page 14)
+	 */
+	bool oscillatorStopped()
+	{
+		uint8_t reg = 0;
+		if (!getRegister(STATUS_REGISTER, reg))
+			return true; // by default, see page 14
+		return 0b1000'0000 & reg;
+	}
+
+	bool oscillatorEnabled()
+	{
+		uint8_t reg = 0;
+		if (!getRegister(CONTROL_REGISTER, reg))
+			return false;
+		return 0b1000'0000 & reg;
+	}
+
+	bool setOscillatorEnabled()
+	{
+		uint8_t reg = 0;
+		if (!getRegister(CONTROL_REGISTER, reg))
+			return false;
+		reg |= 0b1000'0000;
+		return setRegister(CONTROL_REGISTER, reg);
+	}
+
+	bool setBatteryBackedSquareWaveEnabled(bool bEnable)
+	{
+		uint8_t reg = 0;
+		if (!getRegister(CONTROL_REGISTER, reg))
+			return false;
+		if (bEnable)
+			reg |= 0b0100'0000;
+		else
+			reg &= ~0b0100'0000;
+		return setRegister(CONTROL_REGISTER, reg);
+	}
+
+	bool batteryBackedSquareWaveEnabled()
+	{
+		uint8_t reg = 0;
+		if (!getRegister(CONTROL_REGISTER, reg))
+			return false;
+		return reg &= ~0b0100'0000;
+	}
+
+	/**
+	 * CR bit 5: CONV.
+	 * Setting this bit to 1 forces the temperature sensor to convert the
+	 * temperature into digital code and execute the TCXO algorithm
+	 * to update the capacitance array to the oscillator.
+	 */
+	bool setConvertTemperature(bool bSet)
+	{
+		uint8_t reg = 0;
+		if (!getRegister(CONTROL_REGISTER, reg))
+			return false;
+		if (bSet)
+			reg |= 0b0010'0000;
+		else
+			reg &= ~0b0010'0000;
+		return setRegister(CONTROL_REGISTER, reg);
+	}
+
+	/**
+	 * Checks CONV bit in CR.
+	 */
+	bool convertTemperatureEnabled()
+	{
+		uint8_t reg = 0;
+		if (!getRegister(CONTROL_REGISTER, reg))
+			return false;
+		return reg &= ~0b0010'0000;
+	}
+
+	/**
+	 * Bits 4, 3 of CR: These bits control the frequency of the square-wave
+	 * output when the square wave has been enabled.
+	 *
+	 * @param r     rate: 0 - 1kHz, 2 - 1.024kHz, 3 - 4.096kHz, 4 - 8.192kHz
+	 */
+	bool setRate(uint8_t r)
+	{
+		uint8_t reg = 0;
+		if (!getRegister(CONTROL_REGISTER, reg))
+			return false;
+		reg &= 0b1110'0111; // clear
+		reg |= ((0b11 & r) << 3); // set
+		return setRegister(CONTROL_REGISTER, reg);
+	}
+
+	/**
+	 * Returns value of Bits 4, 3 of CR (Rate Select).
+	 */
+	uint8_t rate()
+	{
+		uint8_t reg = 0;
+		if (!getRegister(CONTROL_REGISTER, reg))
+			return ERROR_VALUE;
+		return 0b11 & (reg >> 3);
+	}
+
+	bool alarm1Enabled()
+	{
+		uint8_t reg = 0;
+		if (!getRegister(CONTROL_REGISTER, reg))
+			return false;
+		return reg | 0b0000'0001;
+	}
+
+	bool alarm2Enabled()
+	{
+		uint8_t reg = 0;
+		if (!getRegister(CONTROL_REGISTER, reg))
+			return false;
+		return reg | 0b0000'0010;
+	}
+
+	bool setInterruptEnabled(bool bEnable)
+	{
+		uint8_t reg = 0;
+		if (!getRegister(CONTROL_REGISTER, reg))
+			return false;
+		reg |= 0b0000'0100;
+		return setRegister(CONTROL_REGISTER, reg);
+	}
+
+	bool interruptEnabled()
+	{
+		uint8_t reg = 0;
+		if (!getRegister(CONTROL_REGISTER, reg))
+			return false;
+		return reg &= ~0b0000'0100;
+	}
+
+	/**
+	 * Enables 32kHz pin output.
+	 *
+	 * @returns false if error.
+	 */
+	bool enable32kHz()
+	{
+		uint8_t reg = 0;
+		if (!getRegister(STATUS_REGISTER, reg))
+			return false;
+		reg |= 0b0000'1000;
+		return setRegister(STATUS_REGISTER, reg);
+	}
+
+	/**
+	 * Checks 32kHz pin enabled. Returns false if not or error.
+	 */
+	bool is32kHzEnabled()
+	{
+		uint8_t reg = 0;
+		if (!getRegister(STATUS_REGISTER, reg))
+			return false;
+		return reg | 0b0000'1000;
+	}
+
+	/**
+	 * Returns BSY bit in control register.
+	 *
+	 * This bit indicates the device is busy
+	 * executing TCXO functions. It goes to logic 1 when the
+	 * conversion signal to the temperature sensor is asserted
+	 * and then is cleared when the device is in the 1-minute
+	 * idle state.
+	 */
+	bool busy()
+	{
+		uint8_t reg = 0;
+		if (!getRegister(STATUS_REGISTER, reg))
+			return false;
+		return reg | 0b0000'0100;
+	}
+	bool setAging(int8_t a)
+	{
+		return setRegister(AGING_REGISTER, a);
+	}
+
+	int8_t aging()
+	{
+		uint8_t reg = 0;
+		if (!getRegister(AGING_REGISTER, reg))
+			return ERROR_VALUE;
+		int8_t a = 0;
+		a |= reg;
+		return a;
+	}
+
+	/**
+	 * Returns temperature in XXXYY signed integer format: XXX - integral part,
+	 * YY - 2-digits fractional part. Divide by 100 to get fractional part.
+	 *
+	 * @returns INT16_MIN if error
+	 */
+	int16_t temperature()
+	{
+		int16_t msb = 0;
+		uint8_t lsb = 0;
+		uint8_t reg = 0;
+		if (!getRegister(TEMPERATURE_REGISTER, reg))
+			return INT16_MIN;
+		msb |= reg;
+		msb *= 100; // space for fractional part
+		if (!getRegister(TEMPERATURE_REGISTER + 1, reg))
+			return INT16_MIN;
+		reg >>= 6; // data stored in 7 and 6 bits
+		// fractional part - 1 as 0.25
+		lsb = 25 * reg;
+		return lsb + msb;
+	}
+
 private:
 	/**
 	 * Packs hour value into 1 byte (no 12/24 hour conversions)
@@ -424,10 +741,12 @@ private:
 		DAYOFMONTH_REGISTER = 0x04,
 		MONTH_REGISTER = 0x05,
 		YEAR_REGISTER = 0x06,
-		CONTROL_REGISTER = 0x0E,
-		STATUS_REGISTER = 0x0F,
 		ALARM1_START_REGISTER = 0x07,
 		ALARM2_START_REGISTER = 0x0B,
+		CONTROL_REGISTER = 0x0E,
+		STATUS_REGISTER = 0x0F,
+		AGING_REGISTER = 0x10,
+		TEMPERATURE_REGISTER = 0x11,
 	};
 	bool getRegister(uint8_t regAddr, uint8_t &outValue)
 	{
@@ -452,6 +771,15 @@ using DS3231 = DS3231Impl<I2CClientPolling>;
 #endif // _DS3231_H_INCLUDED_
 /*
 Example
+
+Declare a variable for clock:
+
+I2CPollingModeMaster i2cInstance(&hi2c1);
+DS3231 ds(&i2cInstance, DS3231::DS3231_I2CAddress);
+
+Then simple use methods:
+auto t = ds.dateTime();
+// etc
 
 Alarm:
 Select any free pin and connect to SQW of DS3231.

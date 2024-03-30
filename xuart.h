@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <cstdarg>
 
 #if defined(PLATFORM_STM32_HAL)
 
@@ -16,36 +17,36 @@ public:
 
 	}
 
-	void write(const char *msg)
+	void write(const char *format, ...)
+	{
+		char msg[80];
+		va_list args;
+		va_start(args, format);
+		vsprintf(msg, format, args);
+		va_end(args);
+		_write(msg);
+	}
+
+	void writeLine(const char *format, ...)
+	{
+		char msg[80];
+		va_list args;
+		va_start(args, format);
+		vsprintf(msg, format, args);
+		va_end(args);
+		_writeLine(msg);
+	}
+private:
+	void _write(const char *msg)
 	{
 		HAL_UART_Transmit(_huart, (uint8_t*) msg, strlen(msg), HAL_MAX_DELAY);
 	}
-	void writeLine(const char *msg)
+
+	void _writeLine(const char *msg)
 	{
-		HAL_UART_Transmit(_huart, (uint8_t*) msg, strlen(msg), HAL_MAX_DELAY);
+		_write(msg);
 		const char *EOL = "\r\n";
 		HAL_UART_Transmit(_huart, (uint8_t*) EOL, strlen(EOL), HAL_MAX_DELAY);
-	}
-
-	void write(const char *format, uint32_t value)
-	{
-		char msg[80];
-		sprintf(msg, format, value);
-		write(msg);
-	}
-
-	void write(const char *format, float value)
-	{
-		char msg[80];
-		sprintf(msg, format, value);
-		write(msg);
-	}
-
-	void writeLine(const char *format, uint32_t value)
-	{
-		char msg[80];
-		sprintf(msg, format, value);
-		writeLine(msg);
 	}
 };
 #endif // defined(HAL_UART_MODULE_ENABLED)
