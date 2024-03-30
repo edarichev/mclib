@@ -200,11 +200,10 @@ protected:
 		// msb [7654] - data, lsb[3210] - configuration
 		buf[0] = up | (uint8_t)flags | (uint8_t)_backlight | (uint8_t)LCDTextDisplayControlBit::E;
 		// дублирование сигнала, на выводе Е в этот раз 0
-		// send again, this tine EN is zero
 		buf[1] = up | (uint8_t)flags | (uint8_t)_backlight;
-		//The same for configuration
-		buf[2] = lo | (uint8_t)flags | (uint8_t)_backlight | (uint8_t)LCDTextDisplayControlBit::E;
-		buf[3] = lo | (uint8_t)flags | (uint8_t)_backlight;
+		// всё то же самое, дёргаем второй раз за ногу битом E
+		buf[2] = buf[0];
+		buf[3] = buf[1];
 
 		return TInterfaceClient::write(buf, sizeof(buf));
 	}
