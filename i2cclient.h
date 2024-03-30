@@ -64,6 +64,7 @@ public:
 	bool memRead(uint16_t addr, uint16_t memAddr, uint8_t *buf, uint16_t size,
 			uint32_t timeout) const
 	{
+		// TODO: The value I2C_MEMADD_SIZE_8BIT may be wrong for some cases, check it
 		return HAL_OK == HAL_I2C_Mem_Read(_hi2c, addr, memAddr,
 				I2C_MEMADD_SIZE_8BIT, buf, size, timeout);
 	}
@@ -71,6 +72,7 @@ public:
 	bool memWrite(uint16_t addr, uint16_t memAddr, uint8_t *buf, uint16_t size,
 			uint32_t timeout) const
 	{
+		// TODO: The value I2C_MEMADD_SIZE_8BIT may be wrong for some cases, check it
 		return HAL_OK == HAL_I2C_Mem_Write(_hi2c, addr, memAddr,
 				I2C_MEMADD_SIZE_8BIT, buf, size, timeout);
 	}
