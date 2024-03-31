@@ -112,6 +112,29 @@ int main(void)
     logger.xassert(gy302.setPowerState(BH1750PowerState::PowerOn), "setPowerState:powerOn failed, error: %d", (uint8_t) gy302.error());
     logger.xassert(gy302.setPowerState(BH1750PowerState::Reset), "setPowerState:reset failed, error: %d", (uint8_t) gy302.error());
     logger.xassert(gy302.setResolution(BH1750ResolutionMode::ContinuouslyLow), "setResolution failed, error: %d", (uint8_t) gy302.error());
+    float v1 = gy302.value();
+    logger.xassert(!std::isnan(v1), "Invalid value v1, error: %d", (uint8_t) gy302.error());
+    logger.xassert(gy302.setResolution(BH1750ResolutionMode::OneTimeLow), "setResolution:OneTimeLow failed, error: %d", (uint8_t) gy302.error());
+    float v2 = gy302.value();
+    logger.xassert(!std::isnan(v2), "Invalid value v2, error: %d", (uint8_t) gy302.error());
+    float e = 20; // possible deviation
+    logger.xassert(std::abs(v2 - v1) < e, "Value v2 != v1, error: %d", (uint8_t) gy302.error());
+    gy302.reset(); // reset the device after every measuring in OneTimeXXX modes
+
+    logger.xassert(gy302.setResolution(BH1750ResolutionMode::OneTimeHigh1), "setResolution:OneTimeHigh1 failed, error: %d", (uint8_t) gy302.error());
+    float v3 = gy302.value();
+    logger.xassert(!std::isnan(v3), "Invalid value v3, error: %d", (uint8_t) gy302.error());
+    logger.xassert(std::abs(v3 - v1) < e, "Value v3 != v1, error: %d", (uint8_t) gy302.error());
+    gy302.reset();
+
+    logger.xassert(gy302.setResolution(BH1750ResolutionMode::OneTimeHigh2), "setResolution:OneTimeHigh2 failed, error: %d", (uint8_t) gy302.error());
+    float v4 = gy302.value();
+    logger.xassert(!std::isnan(v4), "Invalid value v4, error: %d", (uint8_t) gy302.error());
+    logger.xassert(std::abs(v4 - v1) < e, "Value v4 != v1, error: %d", (uint8_t) gy302.error());
+    gy302.reset();
+
+    logger.xassert(gy302.setResolution(BH1750ResolutionMode::ContinuouslyHigh1), "setResolution:ContinuouslyHigh1 failed, error: %d", (uint8_t) gy302.error());
+    logger.xassert(gy302.setResolution(BH1750ResolutionMode::ContinuouslyHigh2), "setResolution:ContinuouslyHigh2 failed, error: %d", (uint8_t) gy302.error());
 
     /* USER CODE END 2 */
 

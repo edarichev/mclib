@@ -11,7 +11,16 @@
 #include <delay.h>
 #include <i2cclient.h>
 #include <cstring>
+#include <cmath>
 
+// Enables BH1750::_error member and it states
+#define BH1750_ENABLE_ERROR_CHECKING
+
+#if defined(BH1750_ENABLE_ERROR_CHECKING)
+#define BH1750_SET_ERROR(e) _error = (e);
+#else
+#define BH1750_SET_ERROR(e)
+#endif
 /**
  * BH1750  Power state
  *
@@ -22,9 +31,9 @@ enum class BH1750PowerState : uint8_t
     // No active state.
     PowerDown = 0b0000'0000,
     // Waiting for measurement command.
-    PowerOn = 0b0000'0001,
+    PowerOn   = 0b0000'0001,
     // Reset Data register value. Reset command is not acceptable in Power Down mode.
-    Reset = 0b0000'0111,
+    Reset     = 0b0000'0111,
 };
 
 /**
@@ -44,35 +53,43 @@ enum class BH1750ResolutionMode : uint8_t
 
     // Start measurement at 4lx resolution.
     // Measurement Time is typically 16ms.
-    ContinuouslyLow = 0b0001'0011,
+    ContinuouslyLow   = 0b0001'0011,
 
     // Start measurement at 1lx resolution.
     // Measurement Time is typically 120ms.
     // It is automatically set to Power Down mode after measurement.
-    OneTimeHigh1 = 0b0010'0000,
+    OneTimeHigh1      = 0b0010'0000,
 
     // Start measurement at 0.5lx resolution.
     // Measurement Time is typically 120ms.
     // It is automatically set to Power Down mode after measurement.
-    OneTimeHigh2 = 0b0010'0001,
+    OneTimeHigh2      = 0b0010'0001,
 
     // Start measurement at 4lx resolution.
     // Measurement Time is typically 16ms.
     // It is automatically set to Power Down mode after measurement.
-    OneTimeLow = 0b0010'0011,
+    OneTimeLow        = 0b0010'0011,
 };
 
+/**
+ * Error codes for BH1750
+ *
+ * Note: Only about 70 bytes in the flash memory (.text section) are spent
+ * on error checking.
+ */
 enum class BH1750Error : uint8_t
 {
-    OK = 0,
-    UnableToQueryMTReg = 1, // thestage of query MTReg value failed
-    UnableToReadMTReg = 2, // the stage of read MTReg value failed
-    UnableToWriteMTReg = 3,
-    UnableToWritePowerState = 4,
+    OK                          = 0,
+#if defined(BH1750_ENABLE_ERROR_CHECKING)
+    UnableToQueryMTReg          = 1, // thestage of query MTReg value failed
+    UnableToReadMTReg           = 2, // the stage of read MTReg value failed
+    UnableToWriteMTReg          = 3,
+    UnableToWritePowerState     = 4,
     UnableToWriteResolutionMode = 5,
-    NotReady = 6, // try later
-    UnableToReadRawData = 7,
-    Uninitialized = 8,
+    NotReady                    = 6, // the device may be busy, try later
+    UnableToReadRawData         = 7,
+    Uninitialized               = 8,
+#endif // BH1750_ENABLE_ERROR_CHECKING
 };
 
 /**
@@ -87,22 +104,26 @@ protected:
     // MT register. Selected experimentally. May appear in OneTimeMode.
     enum : uint32_t
     {
-        ChangeModeWaitTimeMs = 50,
-        MeasureModeLowWaitTime = 24,
+        ChangeModeWaitTimeMs    = 50,
+        MeasureModeLowWaitTime  = 24,
         MeasureModeHighWaitTime = 180,
-        MTRegDefaultValue = 69
+        MTRegDefaultValue       = 69
+    };
+    enum : uint16_t {
+        INVALID_RAW_DATA_VALUE = 0xFFFF
     };
     static const constexpr BH1750ResolutionMode DefaultResolutionMode =
             BH1750ResolutionMode::ContinuouslyHigh1;
-protected:
-    BH1750ResolutionMode _mode = DefaultResolutionMode;
     mutable uint32_t _lastUpdateTime = 0;
+    BH1750ResolutionMode _mode = DefaultResolutionMode;
     uint8_t _mtValue = MTRegDefaultValue; // default value, [31...254]
     bool _initialized = false;
     bool _initStarted = false;
     bool _modeChanged = false;
     bool _mtRegChanged = false;
+#if defined(BH1750_ENABLE_ERROR_CHECKING)
     mutable BH1750Error _error = BH1750Error::OK;
+#endif // BH1750_ENABLE_ERROR_CHECKING
 public:
     BH1750Impl(typename TInterfaceClient::InterfacePtrType i2c, uint16_t addr,
             BH1750ResolutionMode mode = DefaultResolutionMode)
@@ -111,11 +132,20 @@ public:
 
     }
 
-    BH1750Error error() const
+    inline BH1750Error error() const
     {
+#if defined(BH1750_ENABLE_ERROR_CHECKING)
         return _error;
+#else
+        return BH1750Error::OK;
+#endif // BH1750_ENABLE_ERROR_CHECKING
     }
 
+    /**
+     * Returns the measurement time register value.
+     *
+     * This value stored in this class instance and not reads from device.
+     */
     uint8_t mtValue() const
     {
         return _mtValue;
@@ -128,21 +158,21 @@ public:
     bool setMTReg(uint8_t mt)
     {
         if (!_initialized && !_initStarted) {
-            _error = BH1750Error::Uninitialized;
+            BH1750_SET_ERROR(BH1750Error::Uninitialized);
             return false;
         }
         if (mt < 31)
             mt = 31;
         if (mt > 254)
             mt = 254;
-        _error = BH1750Error::OK;
+        BH1750_SET_ERROR(BH1750Error::OK);
         _modeChanged = true;
         // 1. Change High bits: 7,6,5
         uint8_t v = mt >> 5;
         v |= 0b01000'000; // Mask for high bits
         bool ok = TInterfaceClient::write(v); // Send high bits
         if (!ok) {
-            _error = BH1750Error::UnableToQueryMTReg;
+            BH1750_SET_ERROR(BH1750Error::UnableToQueryMTReg);
             return false;
         }
         // 2. Change Low bits: 4,3,2,1,0
@@ -150,7 +180,7 @@ public:
         v |= 0b011'00000; // Mask for low bits
         ok = TInterfaceClient::write(v); // Send low bits
         if (!ok) {
-            _error = BH1750Error::UnableToWriteMTReg;
+            BH1750_SET_ERROR(BH1750Error::UnableToWriteMTReg);
             return false;
         }
         _mtValue = mt;
@@ -164,12 +194,12 @@ public:
     inline bool setPowerState(BH1750PowerState s) const
     {
         if (!_initialized) {
-            _error = BH1750Error::Uninitialized;
+            BH1750_SET_ERROR(BH1750Error::Uninitialized);
             return false;
         }
-        _error = BH1750Error::OK;
+        BH1750_SET_ERROR(BH1750Error::OK);
         if (!TInterfaceClient::write((uint8_t) s)) {
-            _error = BH1750Error::UnableToWritePowerState;
+            BH1750_SET_ERROR(BH1750Error::UnableToWritePowerState);
             return false;
         }
         return true;
@@ -207,10 +237,10 @@ public:
     bool setResolution(BH1750ResolutionMode mode)
     {
         if (!_initialized && !_initStarted) {
-            _error = BH1750Error::Uninitialized;
+            BH1750_SET_ERROR(BH1750Error::Uninitialized);
             return false;
         }
-        _error = BH1750Error::OK;
+        BH1750_SET_ERROR(BH1750Error::OK);
         bool ok = false;
         switch (mode) {
         case BH1750ResolutionMode::ContinuouslyHigh1:
@@ -221,7 +251,7 @@ public:
         case BH1750ResolutionMode::OneTimeLow:
             ok = TInterfaceClient::write((uint8_t) mode);
             if (!ok) {
-                _error = BH1750Error::UnableToWriteResolutionMode;
+                BH1750_SET_ERROR(BH1750Error::UnableToWriteResolutionMode);
                 break;
             }
             _mode = mode;
@@ -234,15 +264,15 @@ public:
     bool ready() const
     {
         if (!_initialized) {
-            _error = BH1750Error::Uninitialized;
+            BH1750_SET_ERROR(BH1750Error::Uninitialized);
             return false;
         }
-        _error = BH1750Error::OK;
+        BH1750_SET_ERROR(BH1750Error::OK);
         uint32_t currentTicks = Delay::millis();
         int64_t delta = currentTicks - _lastUpdateTime;
         if ((delta < 0) || (delta > getWaitTimeMs()))
             return true;
-        _error = BH1750Error::NotReady;
+        BH1750_SET_ERROR(BH1750Error::NotReady);
         return false;
     }
 
@@ -251,12 +281,14 @@ public:
      *
      * If sensor is not ready, the return value may be incorrect,
      * please check first with ready() method.
+     *
+     * @returns value or NAN, check return value with isnan()
      */
     float value() const
     {
         if (!_initialized) {
-            _error = BH1750Error::Uninitialized;
-            return false;
+            BH1750_SET_ERROR(BH1750Error::Uninitialized);
+            return NAN;
         }
         uint16_t lumen = 0;
         float result = -1; // (lx)
@@ -267,6 +299,8 @@ public:
         // then please resend measurement instruction. (p. 7)
         // (i.e. call gy302.setResolution(OneTimeXXX) before next reading data)
         lumen = getRawData();
+        if (lumen == INVALID_RAW_DATA_VALUE)
+            return NAN;
         // see page 11
         result = ((float) lumen * MTRegDefaultValue / 1.2f) / _mtValue;
         switch (_mode) {
@@ -287,7 +321,10 @@ public:
      */
     uint32_t intValue() const
     {
-        return (uint32_t) (value() * 100);
+        float v = value();
+        if (std::isnan(v))
+            return (uint32_t)-1;
+        return (uint32_t) (v * 100);
     }
 
 protected:
@@ -312,15 +349,15 @@ protected:
     uint16_t getRawData() const
     {
         if (!_initialized) {
-            _error = BH1750Error::Uninitialized;
-            return false;
+            BH1750_SET_ERROR(BH1750Error::Uninitialized);
+            return INVALID_RAW_DATA_VALUE;
         }
-        _error = BH1750Error::OK;
+        BH1750_SET_ERROR(BH1750Error::OK);
         uint16_t value = 0;
         uint8_t buf[2] = { 0, 0 };
         if (!TInterfaceClient::read(buf, sizeof(buf))) {
-            _error = BH1750Error::UnableToReadRawData;
-            return 0xFFFF;
+            BH1750_SET_ERROR(BH1750Error::UnableToReadRawData);
+            return INVALID_RAW_DATA_VALUE;
         }
         value = ((uint16_t) buf[0] << 8) | buf[1];
         return value;
