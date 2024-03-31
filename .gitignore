@@ -7,3 +7,4 @@
 *.su
 *.list
 *.map
+examples/STM32_HAL/.metadata
