@@ -7,7 +7,7 @@
 3. Create a project in the CubeIDE. Add to include path the `mclib` directory.
 Change language mapping ang compiler of `main.c` to `g++`.
 4. Enable I2C1 and USART2 interfaces
-5. Connect pins to BH1750 board, there GY-302 board is used. The pull-up 10kOhm
+5. Connect pins to BH1750 board, for example GY-302 board may be used. The pull-up 10kOhm
 resistors are present on this board and other resistors are not needed.
 
 For example for NUCLEO-F411RE: 
@@ -61,3 +61,5 @@ int main(void)
     /* USER CODE END 3 */
 }
 ```
+
+<img src="https://github.com/edarichev/mclib/blob/master/examples/STM32_HAL/STM32F411RET6_BH1750/direct_connection_bh1750.jpg" />
