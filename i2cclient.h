@@ -138,6 +138,6 @@ protected:
 	}
 };
 
-using I2CClientPolling = I2CClientImpl<I2CPollingModeMaster>;
+using I2CPollingClient = I2CClientImpl<I2CPollingModeMaster>;
 
 #endif // _I2CCLIENT_H_INCLUDED_

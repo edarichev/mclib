@@ -147,15 +147,54 @@ int main(void)
 
     /* Infinite loop */
     /* USER CODE BEGIN WHILE */
+
+    BH1750ResolutionMode modes[] = {
+            BH1750ResolutionMode::OneTimeLow,
+            BH1750ResolutionMode::ContinuouslyLow,
+            BH1750ResolutionMode::OneTimeHigh1,
+            BH1750ResolutionMode::OneTimeHigh2,
+            BH1750ResolutionMode::ContinuouslyHigh1,
+            BH1750ResolutionMode::ContinuouslyHigh2,
+    };
+
+    const char *names[] = {
+            "OneTimeLow",
+            "ContinuouslyLow",
+            "OneTimeHigh1",
+            "OneTimeHigh2",
+            "ContinuouslyHigh1",
+            "ContinuouslyHigh2",
+    };
+
+    Delay::wait(1000);
     while (1) {
         /* USER CODE END WHILE */
 
         /* USER CODE BEGIN 3 */
-        if (gy302.ready()) {
-            float lux = gy302.value();
-            logger.writeLine("f=%d.%02d; error=%d", (int) lux, ((int) (lux * 100)) % 100, (uint8_t)gy302.error());
+
+        for (size_t i = 0; i < sizeof(modes) / sizeof(BH1750ResolutionMode); ++i) {
+            gy302.setResolution(modes[i]);
+            Delay::wait(1000);
+            for (int c = 0; c < 5; ++c) {
+                if (gy302.ready()) {
+                    float lux = gy302.value();
+                    logger.writeLine("%s: f=%d.%02d; error=%d",
+                            names[i],
+                            (int) lux, ((int) (lux * 100)) % 100,
+                            (uint8_t)gy302.error());
+                }
+                switch (modes[i]) {
+                case BH1750ResolutionMode::OneTimeLow:
+                case BH1750ResolutionMode::OneTimeHigh1:
+                case BH1750ResolutionMode::OneTimeHigh2:
+                    gy302.reset();
+                    break;
+                default:
+                    break;
+                }
+                Delay::wait(1000);
+            }
         }
-        Delay::wait(1000);
     }
     /* USER CODE END 3 */
 }

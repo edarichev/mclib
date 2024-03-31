@@ -96,7 +96,7 @@ enum class BH1750Error : uint8_t
  * BH1750FVI
  * Digital 16bit Serial Output Type Ambient Light Sensor IC
  */
-template<class TInterfaceClient = I2CClientPolling>
+template<class TInterfaceClient = I2CPollingClient>
 class BH1750Impl: public TInterfaceClient
 {
 protected:
@@ -372,7 +372,7 @@ enum class BH1750Addr : uint16_t
     ADDR_VCC = 0x5C << 1,
 };
 
-class BH1750: public BH1750Impl<I2CClientPolling>
+class BH1750: public BH1750Impl<I2CPollingClient>
 {
 public:
     /**
