@@ -96,11 +96,14 @@ public:
 	}
 
 	// TODO: create debug & release version
-	void xassert(bool condition, const char *errorMessage)
+	void xassert(bool condition, const char *format, ...)
 	{
 		if (condition)
 			return;
-		_writeLine(errorMessage);
+        va_list args;
+        va_start(args, format);
+		writeLine(format, args);
+        va_end(args);
 	}
 };
 

@@ -67,6 +67,9 @@ default.size.stdout \
 OBJDUMP_LIST += \
 STM32F411RET6_BH1750.list \
 
+OBJCOPY_HEX += \
+STM32F411RET6_BH1750.hex \
+
 
 # All Target
 all: main-build
@@ -90,12 +93,17 @@ STM32F411RET6_BH1750.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_
 	@echo 'Finished building: $@'
 	@echo ' '
 
+STM32F411RET6_BH1750.hex: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-objcopy  -O ihex $(EXECUTABLES) "STM32F411RET6_BH1750.hex"
+	@echo 'Finished building: $@'
+	@echo ' '
+
 # Other Targets
 clean:
-	-$(RM) STM32F411RET6_BH1750.elf STM32F411RET6_BH1750.list STM32F411RET6_BH1750.map default.size.stdout
+	-$(RM) STM32F411RET6_BH1750.elf STM32F411RET6_BH1750.hex STM32F411RET6_BH1750.list STM32F411RET6_BH1750.map default.size.stdout
 	-@echo ' '
 
-secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST)
+secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST) $(OBJCOPY_HEX)
 
 fail-specified-linker-script-missing:
 	@echo 'Error: Cannot find the specified linker script. Check the linker settings in the build configuration.'
