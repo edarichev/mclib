@@ -134,7 +134,14 @@ int main(void)
     gy302.reset();
 
     logger.xassert(gy302.setResolution(BH1750ResolutionMode::ContinuouslyHigh1), "setResolution:ContinuouslyHigh1 failed, error: %d", (uint8_t) gy302.error());
+    float v5 = gy302.value();
+    logger.xassert(!std::isnan(v5), "Invalid value v5, error: %d", (uint8_t) gy302.error());
+    logger.xassert(std::abs(v5 - v1) < e, "Value v5 != v1, error: %d", (uint8_t) gy302.error());
+
     logger.xassert(gy302.setResolution(BH1750ResolutionMode::ContinuouslyHigh2), "setResolution:ContinuouslyHigh2 failed, error: %d", (uint8_t) gy302.error());
+    float v6 = gy302.value();
+    logger.xassert(!std::isnan(v6), "Invalid value v6, error: %d", (uint8_t) gy302.error());
+    logger.xassert(std::abs(v6 - v1) < e, "Value v6 != v1, error: %d", (uint8_t) gy302.error());
 
     /* USER CODE END 2 */
 
