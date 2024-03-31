@@ -1,0 +1,9 @@
+*.d
+*.o
+*.hex
+*.log
+*.elf
+*.cyclo
+*.su
+*.list
+*.map
