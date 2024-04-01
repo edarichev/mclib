@@ -44,6 +44,30 @@ BH1750 gy302(&i2c);
 // other code
 ```
 
+## UART Logging
+
+For logging via the UART interface, there is the UARTLogger class. 
+This class also contains the `xassert` method to create simple unit tests.
+
+To view UART output you can use `kermit` or another tool.
+```
+sudo apt install kermit
+```
+
+Add the `.kermrc` file into your home directory with contents:
+```
+set line /dev/ttyACM1
+set speed 115200
+set carrier-watch off
+c
+```
+
+To view your COM-port device use this command:
+```
+ls /dev/
+```
+This may be `ttyACM0` or `ttyACM1`.
+
 ## Note for CubeIDE
 
 Do not try rename `main.c` to `main.cpp`, this causes no effects.
