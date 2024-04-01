@@ -7,7 +7,7 @@ If your platform is not present you can use most of it: simple rewrite some spec
 
 ## What's here?
 
-| <div style="width:100px"> </div> |Device|Header|Class|Example|
+| <div style="width:100px">Image</div> |Device|Header|Class|Example|
 |-------|------|------|-----|-------|
 | <img src="https://github.com/edarichev/mclib/blob/master/images/bh1750.png" alt="BH1750 optical sensor" width="64" height="64" /> | BH1750 optical sensor | `bh1750.h` | `BH1750` class |<a href="https://github.com/edarichev/mclib/tree/master/examples/STM32_HAL/STM32F411RET6_BH1750">HAL</a>|
 | <img src="https://github.com/edarichev/mclib/blob/master/images/bmp280.png" alt="BMP280 temperature and pressure sensor" width="64" height="64" /> | BMP280 temperature and pressure sensor | `bmp280.h` | `BMP280` class |<a href="https://github.com/edarichev/mclib/tree/master/examples/STM32_HAL/STM32F411RET6_BMP280">HAL</a>|
