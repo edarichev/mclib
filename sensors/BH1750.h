@@ -318,13 +318,15 @@ public:
     /**
      * Returns value in XXXYY form where XXX - integer part, YY - fractional part:
      * 12345 -> 123.45
+     *
+     * @returns INT32_MIN if error; you can check result: <0 - error, >=0 - OK.
      */
-    uint32_t intValue() const
+    int32_t intValue() const
     {
         float v = value();
         if (std::isnan(v))
-            return (uint32_t)-1;
-        return (uint32_t) (v * 100);
+            return INT32_MIN;
+        return (int32_t) (v * 100);
     }
 
 protected:

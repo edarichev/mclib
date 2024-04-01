@@ -10,55 +10,34 @@ Change language mapping ang compiler of `main.c` to `g++`.
 5. Connect pins to BH1750 board, for example GY-302 board may be used. The pull-up 10kOhm
 resistors are present on this board and other resistors are not needed.
 
-For example for NUCLEO-F411RE: 
+For example for NUCLEO-F411RE and I2C1 interface: 
 
-* GND - 20 Left
-* 3.3V - 16 Left
-* PB7 (SDA) - 22 Left
-* PB6 (SCL) - 17 Right
-* GND (ADDR) - 22 Left
+| GY-302 | NUCLEO-F411RE |
+|--------|---------------| 
+| GND    | GND, 20 Left |
+| 3.3V   | 3.3V, 16 Left (+5V also can be used) |
+| SDA    | PB7, 22 Left |
+| SCL    | PB6, 17 Right |
+| ADDR   | GND, 22 Left |
 
-We connect ADDR to GND because ADDR pin can not be float: either GND, either VDD
+Connect ADDR to GND because ADDR pin can not be float: either GND, either VDD
 to select I2C address.
 
-Write the minimal working code in `main.c`:
+6. Write the minimal working code in correspond sections of `main.c` file:
 
 ```C++
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
 #define PLATFORM_STM32_HAL
+
 #include <sensors/BH1750.h>
 #include <xuart.h>
-/* USER CODE END Includes */
-.............................
-/* USER CODE BEGIN PV */
+
 I2CPollingModeMaster i2c(&hi2c1);
 BH1750 gy302(&i2c);
 
 UARTLogger logger(&huart2);
-/* USER CODE END PV */
-
-int main(void)
-{
-......... generated code is here........
-    /* USER CODE BEGIN 2 */
-    logger.writeLine("Starting sensor...");
-    if (!gy302.init()) {
-        logger.writeLine("Unable to initialize BH1750, error: %d", (uint8_t) gy302.error());
-        while (1);
-    }
-    /* Infinite loop */
-    /* USER CODE BEGIN WHILE */
-    while (1) {
-        /* USER CODE END WHILE */
-
-        /* USER CODE BEGIN 3 */
-        if (gy302.ready()) {
-            float lux = gy302.value();
-            logger.writeLine("f=%d.%02d", (int) lux, ((int) (lux * 100)) % 100);
-        }
-    }
-    /* USER CODE END 3 */
+if (gy302.ready()) {
+    float lux = gy302.value();
+    logger.writeLine("f=%d.%02d", (int) lux, ((int) (lux * 100)) % 100);
 }
 ```
 
