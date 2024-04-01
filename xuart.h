@@ -95,7 +95,7 @@ public:
 
 	}
 
-	// TODO: create debug & release version
+	// TODO: create debug & release version?
 	void xassert(bool condition, const char *format, ...)
 	{
 		if (condition)

@@ -65,7 +65,7 @@ enum class LCDTextDisplaySendFlag
 	Command = 0,
 };
 
-template <uint8_t ROWS, uint8_t COLUMNS, class TInterfaceClient = I2CClientPolling>
+template <uint8_t ROWS, uint8_t COLUMNS, class TInterfaceClient = I2CPollingClient>
 class LCDTextDisplay : public TInterfaceClient
 {
 protected:
@@ -76,6 +76,7 @@ protected:
     uint8_t _displaymode;
     uint8_t _fontSize = (uint8_t)LCDTextDisplayFunctionSet::Size5x8;
     LCDTextDisplayBacklight _backlight = LCDTextDisplayBacklight::NoBacklight;
+    LCDTextDisplayFunctionSet _lineMode = LCDTextDisplayFunctionSet::Line1;
 
 public:
     
@@ -110,7 +111,7 @@ public:
 		command((uint8_t)LCDTextDisplayCommand::FunctiionSet |
 				(uint8_t)LCDTextDisplayFunctionSet::Mode4Bit |
 				_fontSize |
-				(uint8_t)LCDTextDisplayFunctionSet::Line2);
+				(uint8_t)_lineMode);
 		// the number of the display lines and character font can not be changed afterwards
 		// display off
 		command((uint8_t)LCDTextDisplayControl::DisplayOff |
@@ -167,7 +168,7 @@ public:
 				(uint8_t)LCDTextDisplayControl::DisplayOn | _displaycontrol);
 	}
 
-	void setCursor(uint8_t col, uint8_t row)
+	void setCursor(uint8_t row, uint8_t col)
 	{
 		if (row >= _rows)
 			return;
@@ -183,11 +184,23 @@ public:
 	        str++;
 	    }
 	}
-protected:
+
 	uint8_t command(uint8_t command)
+    {
+        return send(command, LCDTextDisplaySendFlag::Command);
+    }
+
+	bool shiftDisplayRight()
 	{
-		return send(command, LCDTextDisplaySendFlag::Command);
+	    uint8_t command = (uint8_t)LCDTextDisplayEntryMode::Right;
+	    return send(command, LCDTextDisplaySendFlag::Command);
 	}
+
+    bool shiftDisplayLeft()
+    {
+        uint8_t command = (uint8_t)LCDTextDisplayEntryMode::Left;
+        return send(command, LCDTextDisplaySendFlag::Command);
+    }
 
 	bool send(uint8_t data, LCDTextDisplaySendFlag flags)
 	{
@@ -198,23 +211,25 @@ protected:
 
 		uint8_t buf[4];
 		// msb [7654] - data, lsb[3210] - configuration
-		buf[0] = up | (uint8_t)flags | (uint8_t)_backlight | (uint8_t)LCDTextDisplayControlBit::E;
+		uint8_t f = (uint8_t)flags | (uint8_t)_backlight;
+		buf[0] = up | f | (uint8_t)LCDTextDisplayControlBit::E;
 		// дублирование сигнала, на выводе Е в этот раз 0
-		buf[1] = up | (uint8_t)flags | (uint8_t)_backlight;
+		buf[1] = up | f;
 		// всё то же самое, дёргаем второй раз за ногу битом E
-		buf[2] = buf[0];
-		buf[3] = buf[1];
+		buf[2] = lo | f | (uint8_t)LCDTextDisplayControlBit::E;
+		buf[3] = lo | f;
 
 		return TInterfaceClient::write(buf, sizeof(buf));
 	}
 
+protected:
 	void delay(uint32_t t)
 	{
 		Delay::wait(t);
 	}
 };
 
-using LCD2004 = LCDTextDisplay<4, 20, I2CClientPolling>;
-using LCD1602 = LCDTextDisplay<2, 16, I2CClientPolling>;
+using LCD2004 = LCDTextDisplay<4, 20, I2CPollingClient>;
+using LCD1602 = LCDTextDisplay<2, 16, I2CPollingClient>;
 
 #endif // _LCD1602_H_INCLUDED_
