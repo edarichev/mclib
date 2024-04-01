@@ -9,9 +9,9 @@ If your platform is not present you can use most of it: simple rewrite some spec
 
 | <div style="width:100px">&nbsp;&nbsp;&nbsp;Image&nbsp;&nbsp;&nbsp;</div> |Device|Header|Class|Example|
 |-------|------|------|-----|-------|
-| <img src="https://github.com/edarichev/mclib/blob/master/images/bh1750.png" alt="BH1750 optical sensor" width="64" height="64" /> | BH1750 optical sensor | `bh1750.h` | `BH1750` class |<a href="https://github.com/edarichev/mclib/tree/master/examples/STM32_HAL/STM32F411RET6_BH1750">HAL</a>|
-| <img src="https://github.com/edarichev/mclib/blob/master/images/bmp280.png" alt="BMP280 temperature and pressure sensor" width="64" height="64" /> | BMP280 temperature and pressure sensor | `bmp280.h` | `BMP280` class |<a href="https://github.com/edarichev/mclib/tree/master/examples/STM32_HAL/STM32F411RET6_BMP280">HAL</a>|
-| <img src="https://github.com/edarichev/mclib/blob/master/images/lcd2004.png" alt="LCD2004 display" width="64" height="64" /> | LCD2004/1602 displays | `display/lcd1602.h` | `LCDTextDisplay` class ||
+| <img src="https://github.com/edarichev/mclib/blob/master/images/bh1750.png" alt="BH1750 optical sensor" width="64" height="64" /> | BH1750 optical sensor | `BH1750.h` | `BH1750` class |<a href="https://github.com/edarichev/mclib/tree/master/examples/STM32_HAL/STM32F411RET6_BH1750">HAL</a>|
+| <img src="https://github.com/edarichev/mclib/blob/master/images/bmp280.png" alt="BMP280 temperature and pressure sensor" width="64" height="64" /> | BMP280 temperature and pressure sensor | `BMP280.h` | `BMP280` class |<a href="https://github.com/edarichev/mclib/tree/master/examples/STM32_HAL/STM32F411RET6_BMP280">HAL</a>|
+| <img src="https://github.com/edarichev/mclib/blob/master/images/lcd2004.png" alt="LCD2004 display" width="64" height="64" /> | LCD2004/1602 displays | `display/LCD1602.h` | `LCDTextDisplay`, `LCD1602`, `LCD2004` |<a href="https://github.com/edarichev/mclib/tree/master/examples/STM32_HAL/STM32F411RET6_LCD2004_I2C">HAL I2C</a>|
 | <img src="https://github.com/edarichev/mclib/blob/master/images/24lc64.png" alt="24LC64" width="64" height="64" /> | 24LC64 EEPROM | `eeprom/24LC64.h` | `memtest_24LC64` function for memory test ||
 | <img src="https://github.com/edarichev/mclib/blob/master/images/DS3231.png" alt="DS3231" width="64" height="64" /> | DS3231 real time clock | `clock/DS3231.h` | `DS3231` class ||
 

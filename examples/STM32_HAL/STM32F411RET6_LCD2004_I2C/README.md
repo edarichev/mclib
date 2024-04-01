@@ -11,4 +11,7 @@ In this example we use NUCLEO-411RE LCD2004 display with I2C adapter and I2C1 in
 | SCL             | PB6 17 Right |
 | SDA             | PB7 21 Left  |
 
-<img src="https://github.com/edarichev/mclib/blob/master/examples/STM32_HAL/STM32F411RET6_BMP280/connect_i2c_lcd2004.jpg" />
+<img src="https://github.com/edarichev/mclib/blob/master/examples/STM32_HAL/STM32F411RET6_LCD2004_I2C/i2c_lcd2004_front.jpg" />
+
+<img src="https://github.com/edarichev/mclib/blob/master/examples/STM32_HAL/STM32F411RET6_LCD2004_I2C/i2c_lcd2004_back.jpg" />
+
