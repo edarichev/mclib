@@ -45,6 +45,11 @@ public:
 	{
 	}
 
+	inline bool isDeviceReady(uint16_t addr, uint32_t trials, uint32_t timeout) const
+	{
+	    return HAL_OK == HAL_I2C_IsDeviceReady(_hi2c, addr, trials, timeout);
+	}
+
 	inline bool write(uint16_t addr, uint8_t b, uint32_t timeout) const
 	{
 		return write(addr, &b, 1, timeout);
@@ -61,21 +66,66 @@ public:
 		return HAL_OK == HAL_I2C_Master_Receive(_hi2c, addr, pBuffer, size, timeout);
 	}
 
-	bool memRead(uint16_t addr, uint16_t memAddr, uint8_t *buf, uint16_t size,
-			uint32_t timeout) const
+	bool memRead(uint16_t addr, uint16_t memAddr, uint16_t addrSize, uint8_t *buf, uint16_t size,
+	        uint32_t timeout) const
 	{
-		// TODO: The value I2C_MEMADD_SIZE_8BIT may be wrong for some cases, check it
+
+        switch (addrSize) {
+        case 16:
+            addrSize = I2C_MEMADD_SIZE_16BIT;
+            break;
+        case 8:
+        default:
+            addrSize = I2C_MEMADD_SIZE_8BIT;
+            break;
+        }
 		return HAL_OK == HAL_I2C_Mem_Read(_hi2c, addr, memAddr,
-				I2C_MEMADD_SIZE_8BIT, buf, size, timeout);
+		        addrSize, buf, size, timeout);
 	}
 
-	bool memWrite(uint16_t addr, uint16_t memAddr, uint8_t *buf, uint16_t size,
-			uint32_t timeout) const
+	bool memWrite(uint16_t addr, uint16_t memAddr, uint16_t addrSize, uint8_t *buf, uint16_t size,
+	        uint32_t timeout) const
 	{
-		// TODO: The value I2C_MEMADD_SIZE_8BIT may be wrong for some cases, check it
+	    uint16_t halAddMemSize = I2C_MEMADD_SIZE_16BIT;
+	    switch (addrSize) {
+	    case 16:
+	        halAddMemSize = I2C_MEMADD_SIZE_16BIT;
+	        break;
+	    case 8:
+	    default:
+	        halAddMemSize = I2C_MEMADD_SIZE_8BIT;
+	        break;
+	    }
 		return HAL_OK == HAL_I2C_Mem_Write(_hi2c, addr, memAddr,
-				I2C_MEMADD_SIZE_8BIT, buf, size, timeout);
+		        halAddMemSize, buf, size, timeout);
 	}
+#if 0
+// Alternative:
+    /**
+     * Reads from memory via I2C
+     *
+     * @param addSize address size in bits: 8 or 16
+     */
+    bool memoryRead(uint16_t memAddr, uint8_t *pBuf, uint16_t bufSize,
+            uint8_t addrSize = 16)
+    {
+        uint8_t addr[2];
+        size_t addressSize = 2;
+        if (addrSize == 16) {
+            addr[0] = (uint8_t)(memAddr >> 8); // MSB of memory address
+            addr[1] = (uint8_t)(memAddr & 0xFF); // LSB of memory address
+        } else {
+            addr[0] = (uint8_t)(memAddr & 0xFF);
+            addressSize = 1;
+        }
+        // send address of starting memory address to read
+        if (!TInterfaceClient::write(addr, addressSize))
+            return false;
+        if (!TInterfaceClient::read(pBuf, bufsize))
+            return false;
+        return true;
+    }
+#endif
 };
 
 #else
@@ -86,9 +136,13 @@ public:
 class I2CClientBase
 {
 	// Public fields.
+
 public:
-	uint16_t I2CAddress = 0x00;
-	uint32_t Timeout = 300;
+    // I2C address.
+    // You can modify address directly, for example, if you have multiple EEPROM's,
+    // you can change this address and work (i.e. it can be used as the Flyweight Pattern).
+	uint16_t I2CAddress = 0x0000;
+	uint32_t Timeout = 1000;
 protected:
 	I2CClientBase(uint16_t addr) : I2CAddress(addr) {}
 };
@@ -127,15 +181,20 @@ protected:
 		return _i2c->read(I2CAddress, b, 1, Timeout);
 	}
 
-	inline bool memRead(uint16_t memAddr, uint8_t *buf, uint16_t size) const
+	inline bool memRead(uint16_t memAddr, uint16_t addrSize, uint8_t *buf, uint16_t size) const
 	{
-		return _i2c->memRead(I2CAddress, memAddr, buf, size, Timeout);
+		return _i2c->memRead(I2CAddress, memAddr, addrSize, buf, size, Timeout);
 	}
 
-	inline bool memWrite(uint16_t memAddr, uint8_t *buf, uint16_t size) const
+	inline bool memWrite(uint16_t memAddr, uint16_t addrSize, uint8_t *buf, uint16_t size) const
 	{
-		return _i2c->memWrite(I2CAddress, memAddr, buf, size, Timeout);
+		return _i2c->memWrite(I2CAddress, memAddr, addrSize, buf, size, Timeout);
 	}
+
+	inline bool isDeviceReady(uint32_t trials = 1) const
+    {
+        return _i2c->isDeviceReady(I2CAddress, trials, Timeout);
+    }
 };
 
 using I2CPollingClient = I2CClientImpl<I2CPollingModeMaster>;

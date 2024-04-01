@@ -16,7 +16,7 @@ For example for NUCLEO-F411RE and I2C1 interface:
 |--------|---------------| 
 | GND    | GND, 20 Left |
 | 3.3V   | 3.3V, 16 Left (+5V also can be used) |
-| SDA    | PB7, 22 Left |
+| SDA    | PB7, 21 Left |
 | SCL    | PB6, 17 Right |
 | ADDR   | GND, 22 Left |
 
