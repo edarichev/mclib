@@ -5,8 +5,8 @@
 1. Take NUCLEO, Blue pill or other board, in this example NUCLEO-F411RE is used.
 2. Connect STM32 board to USB with ST-LINK or USB to TTL.
 3. Create a project in the CubeIDE. Add to include path the `mclib` directory.
-Change language mapping ang compiler of `main.c` to `g++`.
-4. Enable I2C1 and USART2 interfaces
+Change language mapping and compiler of `main.c` to `g++`.
+4. Enable I2C1 and USART2 interfaces.
 5. Connect pins to BH1750 board, for example GY-302 board may be used. The pull-up 10kOhm
 resistors are present on this board and other resistors are not needed.
 

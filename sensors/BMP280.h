@@ -164,7 +164,7 @@ struct BME280CDATA : public BMP280CDATA
  * BMP280
  * DIGITAL PRESSURE SENSOR
  */
-template <class TInterfaceClient = I2CClientPolling,
+template <class TInterfaceClient = I2CPollingClient,
 		class CDATA = BMP280CDATA>
 class BMP280Impl : public TInterfaceClient
 {
@@ -965,7 +965,7 @@ protected:
  *
  * The next references are applied to BME280 datasheet
  */
-template <class TInterfaceClient = I2CClientPolling, class CDATA = BME280CDATA>
+template <class TInterfaceClient = I2CPollingClient, class CDATA = BME280CDATA>
 class BME280Impl : public BMP280Impl<TInterfaceClient, CDATA>
 {
 protected:

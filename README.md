@@ -7,8 +7,8 @@ If your platform is not present you can use most of it: simple rewrite some spec
 
 ## What's here?
 
-|Image|Device|Header|Class|Example|
-|------|------|------|-----|-------|
+| Image |Device|Header|Class|Example|
+|-------|------|------|-----|-------|
 | <img src="https://github.com/edarichev/mclib/blob/master/images/bh1750.png" alt="BH1750 optical sensor" width="64" height="64" /> | BH1750 optical sensor | `bh1750.h` | `BH1750` class |<a href="https://github.com/edarichev/mclib/tree/master/examples/STM32_HAL/STM32F411RET6_BH1750">HAL</a>|
 | <img src="https://github.com/edarichev/mclib/blob/master/images/bmp280.png" alt="BMP280 temperature and pressure sensor" width="64" height="64" /> | BMP280 temperature and pressure sensor | `bmp280.h` | `BMP280` class ||
 | <img src="https://github.com/edarichev/mclib/blob/master/images/lcd2004.png" alt="LCD2004 display" width="64" height="64" /> | LCD2004/1602 displays | `display/lcd1602.h` | `LCDTextDisplay` class ||
@@ -18,11 +18,14 @@ If your platform is not present you can use most of it: simple rewrite some spec
 
 ## How to use
 
-All classes are used according to a uniform scheme:
+All classes are used according to an uniform scheme:
 1. Define a macro for the platform you need:
 * `PLATFORM_STM32_HAL` for STM32 if you use CubeHAL (currently only this platform is supported)
 2. Include the header file of the required class after platform-specific headers
 3. Declare an instance of the I2C/SPI etc. protocol class appropriate for your platform.
+
+For example:
+
 ```C++
 // your existing code:
 #include "stm32f4xx_hal.h" // for example STM32 & HAL for F4xx board
@@ -31,14 +34,13 @@ All classes are used according to a uniform scheme:
 #define PLATFORM_STM32_HAL
 
 // 2. Include required headers (after "stm32f4xx_hal.h"), 
-// This example for GY302 board with BH1750 sensor
-#include <sensors/bh1750.h>
-
-// ...more code...
+// This example for BH1750 sensor
+#define PLATFORM_STM32_HAL
+#include <sensors/BH1750.h>
 
 // 3. Declare I2C instance after initialization of I2C in your platform
-I2CPollingModeMaster i2cInstance(&hi2c1);
-BH1750 gy302(&i2cInstance);
+I2CPollingModeMaster i2c(&hi2c1);
+BH1750 gy302(&i2c);
 // other code
 ```
 
