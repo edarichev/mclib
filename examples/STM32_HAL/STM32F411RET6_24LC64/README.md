@@ -17,4 +17,4 @@ For example for NUCLEO-F411RE and I2C1 interface:
 
 <img src="https://github.com/edarichev/mclib/blob/master/examples/STM32_HAL/STM32F411RET6_24LC64/24lc64_pdip.png" />
 
-<img src="https://github.com/edarichev/mclib/blob/master/examples/STM32_HAL/STM32F411RET6_24LC64/24lc64_pdip.png" />
+<img src="https://github.com/edarichev/mclib/blob/master/examples/STM32_HAL/STM32F411RET6_24LC64/24lc64_maket.jpg" />
