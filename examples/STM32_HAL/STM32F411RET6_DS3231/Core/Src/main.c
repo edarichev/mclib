@@ -36,6 +36,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
+// set to not 0 to run unit test
 #define DS3231_FULL_TEST 0
 
 /* USER CODE END PD */
@@ -265,7 +266,9 @@ int main(void)
     ds.setRate(0);
 #endif // DS3231_FULL_TEST
     setClockAlarm(ds);
-    ds.set32kHzEnabled(true);
+    // disable 32kHz to prevent false alarm
+    ds.set32kHzEnabled(false);
+    clock32 = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */

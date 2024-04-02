@@ -7,7 +7,7 @@ For example for NUCLEO-F411RE and I2C1 interface:
 | DS3231 | NUCLEO-F411RE |
 |--------|---------------|
 | GND    | GND, 20 Left  |
-| VCC    | 3.3V, 16 Left |
+| VCC    | 3.3V, 16 Left, or +5V, 18 Left|
 | SDA    | PB7, 21 Left  |
 | SCL    | PB6, 17 Right |
 | SQW    | PA12, 12 Right |
