@@ -1,5 +1,5 @@
 /**
- * Misc draft functions for 24LC64 EEPROM
+ * A class for 24LC64 EEPROM
  * 
  * @author Evgeny Darichev
  * @date 28.03.2024
