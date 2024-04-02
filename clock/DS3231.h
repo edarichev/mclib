@@ -9,10 +9,11 @@
 #define _DS3231_H_INCLUDED_
 
 #include "../i2cclient.h"
+#include "../delay.h"
 #include <ctime>
 #include <climits>
 
-struct DS3231DateTime
+class DS3231DateTime
 {
 public:
 	uint8_t second = 0;
@@ -57,7 +58,7 @@ public:
 
 #define TO_BCD(x) (((x) % 10) | (((x) / 10) << 4))
 
-template <class TInterfaceClient = I2CClientPolling>
+template <class TInterfaceClient = I2CPollingClient>
 class DS3231Impl : public TInterfaceClient
 {
 public:
@@ -79,11 +80,23 @@ public:
 		
 	}
 	
+	/**
+	 * Clears all registers
+	 */
+	bool clear()
+	{
+	    uint8_t buf[19];
+	    memset(buf, 0, sizeof(buf));
+	    if (!TInterfaceClient::memWrite(0x00, 8, buf, sizeof(buf)))
+	        return false;
+	    return true;
+	}
+
 	DS3231DateTime dateTime()
 	{
 		DS3231DateTime t;
 		uint8_t buf[7]; // 7 bytes for clock data
-		if (!TInterfaceClient::memRead(0x00, buf, sizeof(buf))) {
+		if (!TInterfaceClient::memRead(0x00, 8, buf, sizeof(buf))) {
 			return t;
 		}
 		
@@ -116,7 +129,7 @@ public:
 		buf[4] = TO_BCD(t.day);
 		buf[5] = TO_BCD(t.month) | (t.century << 7);
 		buf[6] = TO_BCD(t.year);
-		if (!TInterfaceClient::memWrite(0x00, buf, sizeof(buf))) {
+		if (!TInterfaceClient::memWrite(0x00, 8, buf, sizeof(buf))) {
 			return false;
 		}
 		return true;
@@ -148,7 +161,7 @@ public:
 		if (!(0b0100'0000 & reg))
 			return true; // already 24-hour format
 		bool pm = 0b0010'0000 & reg;
-		reg = FROM_BCD(reg & 0b0011'1111);
+		reg = FROM_BCD(reg & 0b0001'1111);
 		if (pm)
 			reg += 12;
 		reg = packHour(reg, false, false);
@@ -493,7 +506,7 @@ public:
 		uint8_t reg = 0;
 		if (!getRegister(CONTROL_REGISTER, reg))
 			return false;
-		return reg &= ~0b0100'0000;
+		return reg & 0b0100'0000;
 	}
 
 	/**
@@ -522,7 +535,7 @@ public:
 		uint8_t reg = 0;
 		if (!getRegister(CONTROL_REGISTER, reg))
 			return false;
-		return reg &= ~0b0010'0000;
+		return reg &= 0b0010'0000;
 	}
 
 	/**
@@ -557,7 +570,7 @@ public:
 		uint8_t reg = 0;
 		if (!getRegister(CONTROL_REGISTER, reg))
 			return false;
-		return reg | 0b0000'0001;
+		return reg & 0b0000'0001;
 	}
 
 	bool alarm2Enabled()
@@ -565,15 +578,42 @@ public:
 		uint8_t reg = 0;
 		if (!getRegister(CONTROL_REGISTER, reg))
 			return false;
-		return reg | 0b0000'0010;
+		return reg & 0b0000'0010;
 	}
+
+	bool setAlarm1Enabled(bool bEnable)
+	{
+        uint8_t reg = 0;
+        if (!getRegister(CONTROL_REGISTER, reg))
+            return false;
+        if (bEnable)
+            reg |= 0b0000'0101; // INT & A1IE
+        else
+            reg &= ~0b0000'0001; // only A1IE
+        return setRegister(CONTROL_REGISTER, reg);
+	}
+
+    bool setAlarm2Enabled(bool bEnable)
+    {
+        uint8_t reg = 0;
+        if (!getRegister(CONTROL_REGISTER, reg))
+            return false;
+        if (bEnable)
+            reg |= 0b0000'0110; // INT & A2IE
+        else
+            reg &= ~0b0000'0010; // only A2IE
+        return setRegister(CONTROL_REGISTER, reg);
+    }
 
 	bool setInterruptEnabled(bool bEnable)
 	{
 		uint8_t reg = 0;
 		if (!getRegister(CONTROL_REGISTER, reg))
 			return false;
-		reg |= 0b0000'0100;
+		if (bEnable)
+		    reg |= 0b0000'0100;
+		else
+		    reg &= ~0b0000'0100;
 		return setRegister(CONTROL_REGISTER, reg);
 	}
 
@@ -582,7 +622,7 @@ public:
 		uint8_t reg = 0;
 		if (!getRegister(CONTROL_REGISTER, reg))
 			return false;
-		return reg &= ~0b0000'0100;
+		return reg & 0b0000'0100;
 	}
 
 	/**
@@ -590,12 +630,15 @@ public:
 	 *
 	 * @returns false if error.
 	 */
-	bool enable32kHz()
+	bool set32kHzEnabled(bool bEnable)
 	{
 		uint8_t reg = 0;
 		if (!getRegister(STATUS_REGISTER, reg))
 			return false;
-		reg |= 0b0000'1000;
+		if (bEnable)
+		    reg |= 0b0000'1000;
+		else
+		    reg &= ~0b0000'1000;
 		return setRegister(STATUS_REGISTER, reg);
 	}
 
@@ -607,7 +650,7 @@ public:
 		uint8_t reg = 0;
 		if (!getRegister(STATUS_REGISTER, reg))
 			return false;
-		return reg | 0b0000'1000;
+		return reg & 0b0000'1000;
 	}
 
 	/**
@@ -624,7 +667,7 @@ public:
 		uint8_t reg = 0;
 		if (!getRegister(STATUS_REGISTER, reg))
 			return false;
-		return reg | 0b0000'0100;
+		return reg & 0b0000'0100;
 	}
 	bool setAging(int8_t a)
 	{
@@ -636,9 +679,7 @@ public:
 		uint8_t reg = 0;
 		if (!getRegister(AGING_REGISTER, reg))
 			return ERROR_VALUE;
-		int8_t a = 0;
-		a |= reg;
-		return a;
+		return reg;
 	}
 
 	/**
@@ -684,7 +725,7 @@ private:
 	bool updateAlarm1(uint8_t (&buf)[4])
 	{
 		// 0x07 - alarm1
-		if (!TInterfaceClient::memWrite(ALARM1_START_REGISTER, buf, sizeof(buf))) {
+		if (!TInterfaceClient::memWrite(ALARM1_START_REGISTER, 8, buf, sizeof(buf))) {
 			return false;
 		}
 		uint8_t reg = 0;
@@ -715,7 +756,7 @@ private:
 	bool updateAlarm2(uint8_t (&buf)[3])
 	{
 		// 0x07 - alarm1
-		if (!TInterfaceClient::memWrite(ALARM2_START_REGISTER, buf, sizeof(buf))) {
+		if (!TInterfaceClient::memWrite(ALARM2_START_REGISTER, 8, buf, sizeof(buf))) {
 			return false;
 		}
 		uint8_t reg = 0;
@@ -751,7 +792,7 @@ private:
 	bool getRegister(uint8_t regAddr, uint8_t &outValue)
 	{
 		outValue = 0;
-		if (!TInterfaceClient::memRead(regAddr, &outValue, sizeof(outValue))) {
+		if (!TInterfaceClient::memRead(regAddr, 8, &outValue, sizeof(outValue))) {
 			return false;
 		}
 		return true;
@@ -759,14 +800,14 @@ private:
 
 	bool setRegister(uint8_t regAddr, uint8_t value)
 	{
-		if (!TInterfaceClient::memWrite(regAddr, &value, sizeof(value))) {
+		if (!TInterfaceClient::memWrite(regAddr, 8, &value, sizeof(value))) {
 			return false;
 		}
 		return true;
 	}
 };
 
-using DS3231 = DS3231Impl<I2CClientPolling>;
+using DS3231 = DS3231Impl<I2CPollingClient>;
 
 #endif // _DS3231_H_INCLUDED_
 /*

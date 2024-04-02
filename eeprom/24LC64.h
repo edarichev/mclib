@@ -69,17 +69,18 @@ public:
     /**
      * A memory test for 24LC64
      *
-     * @param testChar test character for pattern, for example 0xAA or 0x55.
-     * @returns true if test passed
+     * @param testChar    a test character for pattern, for example 0xAA or 0x55.
+     * @param maxWaitTime time in milliseconds in each waiting for ready
+     *                    after writing data.
+     * @returns           true if test passed
      */
-    bool memtest(uint8_t testChar) const
+    bool memtest(uint8_t testChar, uint32_t maxWaitTime = 1000) const
     {
         _error = EEPROM24LC64Error::OK;
         const uint8_t PATTERN_SIZE = 16;
         uint8_t wmsgPattern[PATTERN_SIZE];
         memset(wmsgPattern, testChar, PATTERN_SIZE);
         uint8_t buf[PATTERN_SIZE];
-        uint32_t maxWaitTime = 1000;
         for (int addr = 0; addr < MAX_ADDR - PATTERN_SIZE; addr += PATTERN_SIZE) {
             // random access
             if (!write(addr, wmsgPattern, PATTERN_SIZE))
