@@ -14,6 +14,9 @@
 #include <cmath>
 
 // Enables BH1750::_error member and it states
+// Note: Only about 70 bytes in the flash memory (.text section) are spent
+// on error checking. You can disable error checking if a little free space
+// is needed.
 #define BH1750_ENABLE_ERROR_CHECKING
 
 #if defined(BH1750_ENABLE_ERROR_CHECKING)
@@ -73,9 +76,6 @@ enum class BH1750ResolutionMode : uint8_t
 
 /**
  * Error codes for BH1750
- *
- * Note: Only about 70 bytes in the flash memory (.text section) are spent
- * on error checking.
  */
 enum class BH1750Error : uint8_t
 {
@@ -94,6 +94,7 @@ enum class BH1750Error : uint8_t
 
 /**
  * BH1750FVI
+ *
  * Digital 16bit Serial Output Type Ambient Light Sensor IC
  */
 template<class TInterfaceClient = I2CPollingClient>
@@ -107,6 +108,8 @@ protected:
         ChangeModeWaitTimeMs    = 50,
         MeasureModeLowWaitTime  = 24,
         MeasureModeHighWaitTime = 180,
+    };
+    enum : uint8_t {
         MTRegDefaultValue       = 69
     };
     enum : uint16_t {
@@ -241,24 +244,13 @@ public:
             return false;
         }
         BH1750_SET_ERROR(BH1750Error::OK);
-        bool ok = false;
-        switch (mode) {
-        case BH1750ResolutionMode::ContinuouslyHigh1:
-        case BH1750ResolutionMode::ContinuouslyHigh2:
-        case BH1750ResolutionMode::ContinuouslyLow:
-        case BH1750ResolutionMode::OneTimeHigh1:
-        case BH1750ResolutionMode::OneTimeHigh2:
-        case BH1750ResolutionMode::OneTimeLow:
-            ok = TInterfaceClient::write((uint8_t) mode);
-            if (!ok) {
-                BH1750_SET_ERROR(BH1750Error::UnableToWriteResolutionMode);
-                break;
-            }
-            _mode = mode;
-            _lastUpdateTime = Delay::millis();
-            break;
+        if (!TInterfaceClient::write((uint8_t) mode)) {
+            BH1750_SET_ERROR(BH1750Error::UnableToWriteResolutionMode);
+            return false;
         }
-        return ok;
+        _mode = mode;
+        _lastUpdateTime = Delay::millis();
+        return true;
     }
 
     bool ready() const
@@ -268,9 +260,7 @@ public:
             return false;
         }
         BH1750_SET_ERROR(BH1750Error::OK);
-        uint32_t currentTicks = Delay::millis();
-        int64_t delta = currentTicks - _lastUpdateTime;
-        if ((delta < 0) || (delta > getWaitTimeMs()))
+        if (Delay::exceeded(_lastUpdateTime, getWaitTimeMs()))
             return true;
         BH1750_SET_ERROR(BH1750Error::NotReady);
         return false;
@@ -366,6 +356,9 @@ protected:
     }
 };
 
+/**
+ * The address values for BH1750: 0x23 or 0x5C
+ */
 enum class BH1750Addr : uint16_t
 {
     // ADDR pin set to 0 or GND: 0x23
@@ -374,6 +367,9 @@ enum class BH1750Addr : uint16_t
     ADDR_VCC = 0x5C << 1,
 };
 
+/**
+ * The BH1750 sensor class for I2C polling mode.
+ */
 class BH1750: public BH1750Impl<I2CPollingClient>
 {
 public:
