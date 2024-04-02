@@ -16,13 +16,13 @@ For example for NUCLEO-F411RE and I2C1 interface:
 PA11: <br/>
 Select "GPIO_EXTI11"<br/>
 GPIO Mode: External Interrupt Mode with Falling edge trigger detection<br/>
-GPIO Pull-up/pul-down: Pull-up<br/>
+GPIO Pull-up/pull-down: Pull-up<br/>
 Label: RTC_32KHZ
 
 PA12:<br/>
 Select "GPIO_EXTI12"<br/>
 GPIO Mode: External Interrupt Mode with Falling edge trigger detection<br/>
-GPIO Pull-up/pul-down: Pull-up<br/>
+GPIO Pull-up/pull-down: Pull-up<br/>
 Label: RTC_INT<br/>
 
 Enable System->NVIC->EXTI line [15:10] interrupts
