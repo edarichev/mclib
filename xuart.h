@@ -16,74 +16,90 @@ class UARTClient
 private:
 	UART_HandleTypeDef *_huart = nullptr;
 public:
+	uint32_t Timeout = 1000;
+public:
 	UARTClient(UART_HandleTypeDef *huart) : _huart(huart) {}
+
+	bool read(uint8_t *buf, uint16_t bufSize)
+	{
+	    return _read(buf, bufSize);
+	}
 
 	/**
 	 * Writes the string to UART. Uses buffer on the stack with 80 chars.
 	 */
-	void write(const char *format, ...)
+	bool write(const char *format, ...)
 	{
 		char msg[80];
 		va_list args;
 		va_start(args, format);
 		vsprintf(msg, format, args);
 		va_end(args);
-		_write(msg);
+		return _write(msg);
 	}
 
 	/**
 	 * Writes the string to UART. Uses dinamycally allocated buffer with specified size.
 	 */
-	void write(size_t bufAllocSize, const char *format, ...)
+	bool write(size_t bufAllocSize, const char *format, ...)
 	{
 		if (!bufAllocSize)
-			return;
+			return false;
 		char *msg = new char [bufAllocSize];
 		va_list args;
 		va_start(args, format);
 		vsprintf(msg, format, args);
 		va_end(args);
-		_write(msg);
+		bool ok = _write(msg);
 		delete [] msg;
+		return ok;
 	}
 
 	/**
 	 * Writes the string with \r\n ending to UART.
 	 * Uses buffer on the stack with 80 chars.
 	 */
-	void writeLine(const char *format, ...)
+	bool writeLine(const char *format, ...)
 	{
 		char msg[80];
 		va_list args;
 		va_start(args, format);
 		vsprintf(msg, format, args);
 		va_end(args);
-		_writeLine(msg);
+		return _writeLine(msg);
 	}
 
-	void writeLine(size_t bufAllocSize, const char *format, ...)
+	bool writeLine(size_t bufAllocSize, const char *format, ...)
 	{
 		if (!bufAllocSize)
-			return;
+			return false;
 		char *msg = new char [bufAllocSize];
 		va_list args;
 		va_start(args, format);
 		vsprintf(msg, format, args);
 		va_end(args);
-		_writeLine(msg);
+		bool ok = _writeLine(msg);
 		delete [] msg;
+		return ok;
 	}
 protected:
-	void _write(const char *msg)
+
+	bool _read(uint8_t *buf, uint16_t bufSize)
 	{
-		HAL_UART_Transmit(_huart, (uint8_t*) msg, strlen(msg), HAL_MAX_DELAY);
+	    return HAL_OK == HAL_UART_Receive(_huart, buf, bufSize, Timeout);
 	}
 
-	void _writeLine(const char *msg)
+	bool _write(const char *msg)
 	{
-		_write(msg);
+		return HAL_OK == HAL_UART_Transmit(_huart, (uint8_t*) msg, strlen(msg), Timeout);
+	}
+
+	bool _writeLine(const char *msg)
+	{
+		if (!_write(msg))
+		    return false;
 		const char *EOL = "\r\n";
-		HAL_UART_Transmit(_huart, (uint8_t*) EOL, strlen(EOL), HAL_MAX_DELAY);
+		return HAL_OK == HAL_UART_Transmit(_huart, (uint8_t*) EOL, strlen(EOL), Timeout);
 	}
 };
 
@@ -107,6 +123,8 @@ public:
 	}
 };
 
+#else
+#error "Enable at least one UART interface"
 #endif // defined(HAL_UART_MODULE_ENABLED)
 
 #else

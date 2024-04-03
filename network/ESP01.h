@@ -12,6 +12,7 @@
 #include <memory>
 #include "../xuart.h"
 
+// TODO: do it later, ESP-01 does not work
 class ESP01 : public UARTClient
 {
 public:
