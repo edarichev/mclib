@@ -69,7 +69,7 @@ template <uint8_t ROWS, uint8_t COLUMNS, class TInterfaceClient = I2CPollingClie
 class LCDTextDisplay : public TInterfaceClient
 {
 protected:
-	using BaseClass = I2CClientImpl<I2CPollingModeMaster>;
+	using BaseClass = TInterfaceClient;
 	uint8_t _rows = 0;
 	uint8_t _columns = 0;
     uint8_t _displaycontrol;

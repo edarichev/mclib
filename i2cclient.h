@@ -55,9 +55,9 @@ public:
 		return write(addr, &b, 1, timeout);
 	}
 
-	inline bool write(uint16_t addr, uint8_t *b, uint16_t size, uint32_t timeout) const
+	inline bool write(uint16_t addr, const uint8_t *b, uint16_t size, uint32_t timeout) const
 	{
-		return HAL_OK == HAL_I2C_Master_Transmit(_hi2c, addr, b, size, timeout);
+		return HAL_OK == HAL_I2C_Master_Transmit(_hi2c, addr, (uint8_t*)b, size, timeout);
 	}
 
 	bool read(uint16_t addr, uint8_t *pBuffer, uint16_t size,
@@ -83,7 +83,7 @@ public:
 		        addrSize, buf, size, timeout);
 	}
 
-	bool memWrite(uint16_t addr, uint16_t memAddr, uint16_t addrSize, uint8_t *buf, uint16_t size,
+	bool memWrite(uint16_t addr, uint16_t memAddr, uint16_t addrSize, const uint8_t *buf, uint16_t size,
 	        uint32_t timeout) const
 	{
 	    uint16_t halAddMemSize = I2C_MEMADD_SIZE_16BIT;
@@ -97,7 +97,7 @@ public:
 	        break;
 	    }
 		return HAL_OK == HAL_I2C_Mem_Write(_hi2c, addr, memAddr,
-		        halAddMemSize, buf, size, timeout);
+		        halAddMemSize, (uint8_t*)buf, size, timeout);
 	}
 #if 0
 // Alternative:
@@ -166,7 +166,7 @@ protected:
 		return _i2c->write(I2CAddress, b, Timeout);
 	}
 
-	inline bool write(uint8_t *b, uint16_t size) const
+	inline bool write(const uint8_t *b, uint16_t size) const
 	{
 		return _i2c->write(I2CAddress, b, size, Timeout);
 	}
@@ -186,7 +186,7 @@ protected:
 		return _i2c->memRead(I2CAddress, memAddr, addrSize, buf, size, Timeout);
 	}
 
-	inline bool memWrite(uint16_t memAddr, uint16_t addrSize, uint8_t *buf, uint16_t size) const
+	inline bool memWrite(uint16_t memAddr, uint16_t addrSize, const uint8_t *buf, uint16_t size) const
 	{
 		return _i2c->memWrite(I2CAddress, memAddr, addrSize, buf, size, Timeout);
 	}
