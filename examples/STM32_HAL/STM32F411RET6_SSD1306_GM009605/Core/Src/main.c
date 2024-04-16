@@ -26,6 +26,7 @@
 #include <display/SSD1306.h>
 #include <display/fonts/fontCP866_8x8.h>
 #include <display/fonts/font_mono_10x18.h>
+#include <display/fonts/font_mono_10x18_min.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -121,7 +122,7 @@ int main(void)
     display.setPos(2, 5);
     display.printString("Hello, world!!!", FontCP866_8x8);
     Delay::wait(1000);
-    uint8_t lb[8] = {0x41,0x7F,0x7F,0x08,0x1C,0x77,0x63,0x00,};
+    uint8_t lb[8] = {0x41,0x7F,0x7F,0x49,0x1D,0x01,0x03,0x00};
     display.fillWith(lb);
     Delay::wait(1000);
     display.setGraphicsMode();
@@ -198,19 +199,25 @@ int main(void)
     int charWidth = 10;
     int charHeight = 18;
 
-    uint8_t ch = 0;
+    display.fill(0);
+    display.drawString(0xFFFFFFFF, 0, 0, "Hello, world",
+            Font10x18_min, Font10x18_min_remap, Font10x18_min_remap_char_count,
+            charWidth, charHeight);
+    display.flush();
+
+    /*uint8_t ch = 0;
     for (int a = 0; a < 8; ++a) {
         display.fill(0);
         for (int r = 0; r < 3; ++r) {
             for (int c = 0; c < 13; c++) {
                 str[0] = ch == 0 ? ' ' : ch;
                 ch++;
-                display.drawString(0xFFFFFFFF, c * charWidth, r * charHeight, str, Font10x18, 10, 18);
+                display.drawString(0xFFFFFFFF, c * charWidth, r * charHeight, str, Font10x18, charWidth, charHeight);
             }
         }
         display.flush();
         Delay::wait(3000);
-    }
+    }*/
     /* USER CODE END 2 */
 
     /* Infinite loop */

@@ -8,6 +8,7 @@
 #define _SSD1306_H_INCLUDED_
 
 #include <cmath>
+#include <cstdlib>
 #include "../i2cclient.h"
 
 #include "../xuart.h"
@@ -351,6 +352,42 @@ private:
             x += symbolWidth;
         }
     }
+
+    static void drawString(uint32_t color, int left, int top, const char *s,
+            const uint8_t *fontData, const uint8_t *remapFontArray,
+            uint32_t remapCharCount,
+            int symbolWidth, int symbolHeight,
+            uint8_t *dest, int width, int height)
+    {
+        int x = left;
+        int y = top;
+        UARTLogger logger(&huart2);
+        while (char ch = *s++) {
+            int charIndex = ch;
+            uint8_t *pfind = (uint8_t *)std::bsearch(&charIndex, remapFontArray, remapCharCount, sizeof(uint8_t),
+                    [](void const *lhs, void const *rhs) { return *(uint8_t*)lhs - *(uint8_t*)rhs; });
+            if (!pfind)
+                continue;
+            charIndex = pfind - remapFontArray;
+            int bitmapStartPixel = charIndex * symbolWidth * symbolHeight;
+            int i = bitmapStartPixel;
+            for (int r = 0; r < symbolHeight; ++r) {
+                for (int c = 0; c < symbolWidth; ++c, ++i) {
+                    uint32_t byteNumber = i / 8;
+                    uint32_t bitNumber = 7 - (i - byteNumber * 8);
+                    uint8_t byte = fontData[byteNumber];
+                    byte >>= bitNumber;
+                    byte &= 1;
+                    if (byte)
+                        setPixel(color, x + c, y + r, dest, width, height);
+                    logger.write("%c", byte ? '1' : '0');
+                }
+                logger.write("\r\n");
+            }
+            logger.write("\r\n");
+            x += symbolWidth;
+        }
+    }
 public:
     void drawString(uint32_t color, int left, int top, const char *s,
                 const uint8_t *fontData, int symbolWidth, int symbolHeight)
@@ -358,6 +395,16 @@ public:
         if (!_ram)
             return;
         drawString(color, left, top, s, fontData, symbolWidth, symbolHeight, _ram, _width, _height);
+    }
+
+    void drawString(uint32_t color, int left, int top, const char *s,
+                    const uint8_t *fontData, const uint8_t *remapFontArray,
+                    uint32_t remapCharCount,
+                    int symbolWidth, int symbolHeight)
+    {
+        if (!_ram)
+            return;
+        drawString(color, left, top, s, fontData, remapFontArray, remapCharCount, symbolWidth, symbolHeight, _ram, _width, _height);
     }
     /**
      * Draws the bitmap

@@ -77,9 +77,6 @@ def makeFontArray(bitlist):
     bitnum = 0
     while i < len(bitlist):
         b = b * 2 + bitlist[i];
-        print(bitlist[i], end='')
-        if i % 100 == 0:
-            print('')
         if bitnum == 7:
             cStr += str(b) + ", "
             if k % 10 == 0:
@@ -92,24 +89,102 @@ def makeFontArray(bitlist):
         pass
     return cStr
 
+###############################################################################
+
+def cutSymbols(text, fontBits, charWidth, charHeight):
+    # вставляем в порядке возрастания кода символа сам символ и его битмап, если его ещё нет
+    minBits = []
+    minFontCharCodes = []
+    for ch in text:
+        chCode = ord(ch)
+        x = chCode * charWidth * charHeight
+        pos = 0
+        while pos < len(minFontCharCodes):
+            if minFontCharCodes[pos] == chCode:
+                pos = -1 # уже есть, не нужно
+                break
+            if minFontCharCodes[pos] > chCode:
+                break
+            pos = pos + 1
+        if pos == -1:
+            continue
+        minFontCharCodes.insert(pos, chCode)
+        minBits.insert(pos, fontBits[x:x + charWidth * charHeight])
+        print(minFontCharCodes)
+    pass # for
+    merged_list = []
+    for sublist in minBits:
+        merged_list.extend(sublist)
+    return (minFontCharCodes, merged_list)
+
+###############################################################################
+
+def generateMinFontRemap(minFontData):
+    strSrc = ""
+    i = 1
+    for chCode in minFontData[0]: # char codes
+        strSrc += "0x{:02X}".format(chCode) + ", "
+        if i % 10 == 0:
+            strSrc += "\n"
+        i = i + 1
+    return strSrc
+
+###############################################################################
+
 fileName = 'CP866_10x18_line.png'
 img = Image.open(fileName, mode='r')
 
-fontBits = makeFontBitList(img, 10, 18)
+charWidth = 10
+charHeight = 18
+
+fontBits = makeFontBitList(img, charWidth, charHeight)
 cppSrc = makeFontArray(fontBits);
-content = """// Monospace font 10x18
+strXDim = str(charWidth) + """x""" + str(charHeight)
+strGuard = "_FONT_MONO_" + strXDim + "_INCLUDED_"
+content = """// Monospace font """ + strXDim + """
 
-#ifndef _FONT_MONO_10X18_INCLUDED_
-#define _FONT_MONO_10X18_INCLUDED_
+#ifndef """ + strGuard + """
+#define """ + strGuard + """
 
-static const uint8_t Font10x18[] = {
+const uint8_t Font""" + strXDim + """[] = {
 """ + cppSrc + """};
 
-#endif // _FONT_MONO_10X18_INCLUDED_
+#endif // """ + strGuard + """
 
 """
 
 outFile = "../fonts/font_mono_10x18.h"
+with open(outFile, "w") as f:
+    f.write(content)
+    pass
+
+# Только необходимые символы
+
+text = "Hello, world"
+minFontData = cutSymbols(text, fontBits, charWidth, charHeight)
+cppSrc = makeFontArray(minFontData[1]);
+
+outFile = "../fonts/font_mono_10x18_min.h"
+strGuard = "_FONT_MONO_" + strXDim + "_MIN_INCLUDED_"
+content = """// Monospace minimized font """ + strXDim + """
+
+#ifndef """ + strGuard + """
+#define """ + strGuard + """
+
+const uint8_t Font""" + strXDim + """_min[] = {
+""" + cppSrc + """};
+
+"""
+cppSrc = generateMinFontRemap(minFontData)
+
+content += """const uint8_t Font""" + strXDim + """_min_remap[] = {
+""" + cppSrc + """};
+
+#define Font""" + strXDim + """_min_remap_char_count (sizeof(Font""" + strXDim + """_min_remap) / sizeof(uint8_t))
+#endif // """ + strGuard + """
+
+"""
+
 with open(outFile, "w") as f:
     f.write(content)
     pass

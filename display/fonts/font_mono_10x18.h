@@ -1,9 +1,9 @@
 // Monospace font 10x18
 
-#ifndef _FONT_MONO_10X18_INCLUDED_
-#define _FONT_MONO_10X18_INCLUDED_
+#ifndef _FONT_MONO_10x18_INCLUDED_
+#define _FONT_MONO_10x18_INCLUDED_
 
-static const uint8_t Font10x18[] = {
+const uint8_t Font10x18[] = {
 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 0, 0, 0, 0, 0, 0, 0, 1, 225, 134, 
@@ -582,5 +582,5 @@ static const uint8_t Font10x18[] = {
 0, 0, 0, 0, 0, 64, 80, 23, 252, 0, 
 };
 
-#endif // _FONT_MONO_10X18_INCLUDED_
+#endif // _FONT_MONO_10x18_INCLUDED_
 
