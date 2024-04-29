@@ -141,7 +141,7 @@ int main(void)
     display.fillRectangle(0xFFFFFFFF, 50, 20, 40, 15);
     display.fillEllipse(0xFFFFFFFF, 50, 40, 40, 15);*/
 
-    uint8_t bmp19x19[] = {
+    /*uint8_t bmp19x19[] = {
             0b10000000,
             0b01000000,
             0b00101000,
@@ -190,12 +190,11 @@ int main(void)
             0b10000000,
     };
 
-    /*display.drawBitmap(7, 29, bmp19x19, 19, 19, RasterOpCode::SRCAND);
+    display.drawBitmap(7, 29, bmp19x19, 19, 19, RasterOpCode::SRCAND);
     display.drawBitmap(7 + 19, 29, bmp19x19, 19, 19, RasterOpCode::SRCCOPY);
     display.drawBitmap(7 + 19*2, 29, bmp19x19, 19, 19, RasterOpCode::SRCOR);
     display.drawBitmap(7 + 19*3, 29, bmp19x19, 19, 19, RasterOpCode::SRCXOR);*/
 
-    char str[2] = {0, 0};
     int charWidth = 10;
     int charHeight = 18;
 
@@ -206,6 +205,7 @@ int main(void)
     display.flush();
 
     /*uint8_t ch = 0;
+    char str[2] = {0, 0};
     for (int a = 0; a < 8; ++a) {
         display.fill(0);
         for (int r = 0; r < 3; ++r) {

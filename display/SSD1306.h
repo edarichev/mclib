@@ -86,31 +86,71 @@ public:
         sendCommand(SSD1306Command::SET_MEMORY_ADDRESSING_MODE);
         sendCommand(SSD1306Command::SET_PAGE_ADDRESSING_MODE); // page addressing, 0xb0 - start address
         sendCommand(0xB0);
-        sendCommand(0xC8); //Set COM Output Scan Direction
-        sendCommand(0x00); //---set low column address
-        sendCommand(0x10); //---set high column address
-        sendCommand(0x40); //--set start line address
+        sendCommand(0xC8); // Set COM Output Scan Direction
+        sendCommand(0x00); // set low column address
+        sendCommand(0x10); // set high column address
+        sendCommand(0x40); // set start line address
         sendCommand(SSD1306Command::SET_CONTRAST_CONTROL);
         sendCommand(0xFF);
-        sendCommand(0xA1); //--set segment re-map 0 to 127
+        sendCommand(0xA1); // set segment re-map 0 to 127
         sendCommand(SSD1306Command::SET_NORMAL_DISPLAY); //--set normal display
-        sendCommand(0xA8); //--set multiplex ratio(1 to 64)
+        sendCommand(0xA8); // set multiplex ratio(1 to 64)
         sendCommand(0x3F); //
         sendCommand(SSD1306Command::DISPLAY_ON_RESUME_TO_RAM);
-        sendCommand(0xD3); //-set display offset
-        sendCommand(0x00); //-not offset
-        sendCommand(0xD5); //--set display clock divide ratio/oscillator frequency
-        sendCommand(0xF0); //--set divide ratio
-        sendCommand(0xD9); //--set pre-charge period
+        sendCommand(0xD3); // set display offset
+        sendCommand(0x00); // not offset
+        sendCommand(0xD5); // set display clock divide ratio/oscillator frequency
+        sendCommand(0xF0); // set divide ratio
+        sendCommand(0xD9); // set pre-charge period
         sendCommand(0x22); //
-        sendCommand(0xDA); //--set com pins hardware configuration
+        sendCommand(0xDA); // set com pins hardware configuration
         sendCommand(0x12);
-        sendCommand(0xDB); //--set vcomh
-        sendCommand(0x20); //0x20,0.77xVcc
-        sendCommand(0x8D); //--set DC-DC enable
+        sendCommand(0xDB); // set vcomh
+        sendCommand(0x20); // 0x20,0.77xVcc
+        sendCommand(0x8D); // set DC-DC enable
         sendCommand(0x14); //
         sendCommand(SSD1306Command::DISPLAY_ON);
         return true;
+    }
+
+    bool setContrast(uint8_t value)
+    {
+        uint8_t cmd[2] = { SSD1306Command::SET_CONTRAST_CONTROL, value };
+        return sendCommand(cmd, sizeof(cmd));
+    }
+
+    /**
+     * @param useRAMContent true: Resume to RAM content display (RESET) Output follows RAM content;
+     *                      false: Entire display ON, Output ignores RAM content
+
+     */
+    bool on(bool useRAMContent)
+    {
+        return TInterfaceClient::write(useRAMContent ?
+                SSD1306Command::DISPLAY_ON_RESUME_TO_RAM :
+                SSD1306Command::DISPLAY_ON_IGNORE_RAM);
+    }
+
+    inline bool sendCommand(uint8_t* data, uint32_t size)
+    {
+        return TInterfaceClient::memWrite(0, 8, data, size);
+    }
+
+    inline bool sendCommand(uint8_t data)
+    {
+        return TInterfaceClient::memWrite(0, 8, &data, sizeof(data));
+    }
+
+    inline bool sendCommand(uint8_t cmd, uint8_t data)
+    {
+        uint8_t c[2] = {cmd, data};
+        return TInterfaceClient::memWrite(0, 8, c, sizeof(data));
+    }
+
+    bool sendData(const uint8_t* data, uint32_t size)
+    {
+        // 0x40 - начало блока RAM в дисплее
+        return TInterfaceClient::memWrite(0x40, 8, data, size);// or interrupt
     }
 
     void fill(uint32_t color)
@@ -156,62 +196,6 @@ public:
         }
     }
 
-    static void setPixel(uint32_t color, int x, int y, uint8_t *arr, int width, int height)
-    {
-        if (x < 0 || x >= width || y < 0 || y >= height || width < 0 || height < 0)
-            return;
-        uint8_t &p = arr[x + (y / 8) * width];
-        uint8_t v = (1 << (y % 8));
-        if (color)
-            p |= v;
-        else
-            p &= ~v;
-    }
-
-    static uint32_t getPixel(int x, int y, uint8_t *arr, int width, int height)
-    {
-        if (x < 0 || x >= width || y < 0 || y >= height || width < 0 || height < 0)
-            return 0;
-        return (arr[x + (y / 8) * width] & (1 << (y % 8))) ? 0xFFFFFFFF : 0;
-    }
-
-    static void line(uint32_t color, int x0, int y0, int x1, int y1, uint8_t *arr, int width, int height)
-    {
-        if (x0 == x1) {
-            for (int y = y0; y <= y1; ++y)
-                setPixel(color, x0, y, arr, width, height);
-            return;
-        }
-        if (y0 == y1) {
-            for (int x = x0; x <= x1; ++x)
-                setPixel(color, x, y0, arr, width, height);
-            return;
-        }
-        int dx = ABS(x1 - x0);
-        int sx = x0 < x1 ? 1 : -1;
-        int dy = -abs(y1 - y0);
-        int sy = y0 < y1 ? 1 : -1;
-        int error = dx + dy;
-
-        while (true) {
-            setPixel(color, x0, y0, arr, width, height);
-            if (x0 == x1 && y0 == y1)
-                break;
-            int e2 = 2 * error;
-            if (e2 >= dy) {
-                if (x0 == x1)
-                    break;
-                error = error + dy;
-                x0 = x0 + sx;
-            }
-            if (e2 <= dx) {
-                if (y0 == y1)
-                    break;
-                error = error + dx;
-                y0 = y0 + sy;
-            }
-        }
-    }
 
     void drawLine(uint32_t color, int x0, int y0, int x1, int y1)
     {
@@ -303,92 +287,6 @@ public:
         }
     }
 
-    static uint8_t getMonoBitmapBitValue(uint32_t pixelNumber, const uint8_t *bmpMonoSource)
-    {
-        uint32_t byteNumber = pixelNumber / 8;
-        uint8_t byte = *(bmpMonoSource + byteNumber);
-        uint32_t bitNumber = 7 - (pixelNumber - byteNumber * 8);
-        byte >>= bitNumber;
-        byte &= 0x01; // выделить значение пиксела
-        return byte;
-    }
-
-private:
-    /**
-     * Рисует строку в битмапе.
-     *
-     * @param fontData Битмапы букв шрифта. Шрифт может быть любого размера.
-     *        Кодируется побитово: 1 - есть окраска, 0 - не окрашено.
-     *        Буква выравнивается до байта, например, буква в 12 пикселей
-     *        по ширине и 18 в высоту займёт 2 байта по ширине и 18 по высоте.
-     *        Буквы рисуются как есть, сверху вниз без разворотов,
-     *        незанятые биты заполняются нулями.
-     */
-    static void drawString(uint32_t color, int left, int top, const char *s,
-            const uint8_t *fontData, int symbolWidth, int symbolHeight,
-            uint8_t *dest, int width, int height)
-    {
-        int x = left;
-        int y = top;
-        UARTLogger logger(&huart2);
-        while (char ch = *s++) {
-            int charIndex = ch;
-            int bitmapStartPixel = charIndex * symbolWidth * symbolHeight;
-            int i = bitmapStartPixel;
-            for (int r = 0; r < symbolHeight; ++r) {
-                for (int c = 0; c < symbolWidth; ++c, ++i) {
-                    uint32_t byteNumber = i / 8;
-                    uint32_t bitNumber = 7 - (i - byteNumber * 8);
-                    uint8_t byte = fontData[byteNumber];
-                    byte >>= bitNumber;
-                    byte &= 1;
-                    if (byte)
-                        setPixel(color, x + c, y + r, dest, width, height);
-                    logger.write("%c", byte ? '1' : '0');
-                }
-                logger.write("\r\n");
-            }
-            logger.write("\r\n");
-            x += symbolWidth;
-        }
-    }
-
-    static void drawString(uint32_t color, int left, int top, const char *s,
-            const uint8_t *fontData, const uint8_t *remapFontArray,
-            uint32_t remapCharCount,
-            int symbolWidth, int symbolHeight,
-            uint8_t *dest, int width, int height)
-    {
-        int x = left;
-        int y = top;
-        UARTLogger logger(&huart2);
-        while (char ch = *s++) {
-            int charIndex = ch;
-            uint8_t *pfind = (uint8_t *)std::bsearch(&charIndex, remapFontArray, remapCharCount, sizeof(uint8_t),
-                    [](void const *lhs, void const *rhs) { return *(uint8_t*)lhs - *(uint8_t*)rhs; });
-            if (!pfind)
-                continue;
-            charIndex = pfind - remapFontArray;
-            int bitmapStartPixel = charIndex * symbolWidth * symbolHeight;
-            int i = bitmapStartPixel;
-            for (int r = 0; r < symbolHeight; ++r) {
-                for (int c = 0; c < symbolWidth; ++c, ++i) {
-                    uint32_t byteNumber = i / 8;
-                    uint32_t bitNumber = 7 - (i - byteNumber * 8);
-                    uint8_t byte = fontData[byteNumber];
-                    byte >>= bitNumber;
-                    byte &= 1;
-                    if (byte)
-                        setPixel(color, x + c, y + r, dest, width, height);
-                    logger.write("%c", byte ? '1' : '0');
-                }
-                logger.write("\r\n");
-            }
-            logger.write("\r\n");
-            x += symbolWidth;
-        }
-    }
-public:
     void drawString(uint32_t color, int left, int top, const char *s,
                 const uint8_t *fontData, int symbolWidth, int symbolHeight)
     {
@@ -405,79 +303,6 @@ public:
         if (!_ram)
             return;
         drawString(color, left, top, s, fontData, remapFontArray, remapCharCount, symbolWidth, symbolHeight, _ram, _width, _height);
-    }
-    /**
-     * Draws the bitmap
-     *
-     * @param bmpMonoSource монохромный битмап (1 бит на пиксель) в нормальном человеческом представлении,
-     *                      т.е. по строкам и по столбцам, как если бы это
-     *                      была обычная картинка (не постранично и не повёрнуто,
-     *                      как в этом дисплее).
-     *                      Можно нарисовать в Calc или Excel с помощью 0 и 1
-     *                      нужный битмап, а затем последовательно соединить всё в одну строку,
-     *                      разбить по 8 цифр и дополнить справа до 8.
-     */
-    static void drawBitmap(int xdest, int ydest, uint8_t *bmpMonoSource,
-            int bmpWidth, int bmpHeight,
-            uint8_t *dest, int width, int height,
-            RasterOpCode opCode)
-    {
-        if (xdest >= width || ydest >= height)
-            return;
-        int right = MIN(width, xdest + MIN(bmpWidth, width));
-        int bottom = MIN(height, ydest + MIN(bmpHeight, height));
-        uint32_t pixelNumber = 0;
-        int ySrc = 0, x = 0, y = 0;
-        uint32_t color = 0, prevColor = 0;
-        switch (opCode) {
-        case RasterOpCode::SRCCOPY: {
-            for (y = ydest, ySrc = 0; y < bottom; ++y, ++ySrc) {
-                pixelNumber = ySrc * bmpWidth;
-                for (x = xdest; x < right; ++x, ++pixelNumber) {
-                    uint8_t byte = getMonoBitmapBitValue(pixelNumber, bmpMonoSource);
-                    color = byte ? 0xFFFFFFFF : 0;
-                    setPixel(color, x, y, dest, width, height);
-                }
-            }
-        }
-        break;
-        case RasterOpCode::SRCAND: {
-            for (y = ydest, ySrc = 0; y < bottom; ++y, ++ySrc) {
-                pixelNumber = ySrc * bmpWidth;
-                for (x = xdest; x < right; ++x, ++pixelNumber) {
-                    uint8_t byte = getMonoBitmapBitValue(pixelNumber, bmpMonoSource);
-                    color = byte ? 0xFFFFFFFF : 0;
-                    prevColor = getPixel(x, y, dest, width, height);
-                    setPixel(color & prevColor, x, y, dest, width, height);
-                }
-            }
-        }
-        break;
-        case RasterOpCode::SRCOR: {
-            for (y = ydest, ySrc = 0; y < bottom; ++y, ++ySrc) {
-                pixelNumber = ySrc * bmpWidth;
-                for (x = xdest; x < right; ++x, ++pixelNumber) {
-                    uint8_t byte = getMonoBitmapBitValue(pixelNumber, bmpMonoSource);
-                    color = byte ? 0xFFFFFFFF : 0;
-                    prevColor = getPixel(x, y, dest, width, height);
-                    setPixel(color | prevColor, x, y, dest, width, height);
-                }
-            }
-        }
-        break;
-        case RasterOpCode::SRCXOR: {
-            for (y = ydest, ySrc = 0; y < bottom; ++y, ++ySrc) {
-                pixelNumber = ySrc * bmpWidth;
-                for (x = xdest; x < right; ++x, ++pixelNumber) {
-                    uint8_t byte = getMonoBitmapBitValue(pixelNumber, bmpMonoSource);
-                    color = byte ? 0xFFFFFFFF : 0;
-                    prevColor = getPixel(x, y, dest, width, height);
-                    setPixel(color ^ prevColor, x, y, dest, width, height);
-                }
-            }
-        }
-        break;
-        } // switch
     }
 
     void drawBitmap(int xdest, int ydest, uint8_t *bmpMonoSource,
@@ -553,44 +378,221 @@ public:
         return setPixel(color, x, y, _ram, _width, _height);
     }
 
-    bool setContrast(uint8_t value)
+
+private:
+    static void setPixel(uint32_t color, int x, int y, uint8_t *arr, int width, int height)
     {
-        uint8_t cmd[2] = { SSD1306Command::SET_CONTRAST_CONTROL, value };
-        return sendCommand(cmd, sizeof(cmd));
+        if (x < 0 || x >= width || y < 0 || y >= height || width < 0 || height < 0)
+            return;
+        uint8_t &p = arr[x + (y / 8) * width];
+        uint8_t v = (1 << (y % 8));
+        if (color)
+            p |= v;
+        else
+            p &= ~v;
+    }
+
+    static uint32_t getPixel(int x, int y, uint8_t *arr, int width, int height)
+    {
+        if (x < 0 || x >= width || y < 0 || y >= height || width < 0 || height < 0)
+            return 0;
+        return (arr[x + (y / 8) * width] & (1 << (y % 8))) ? 0xFFFFFFFF : 0;
+    }
+
+    static void line(uint32_t color, int x0, int y0, int x1, int y1, uint8_t *arr, int width, int height)
+    {
+        if (x0 == x1) {
+            for (int y = y0; y <= y1; ++y)
+                setPixel(color, x0, y, arr, width, height);
+            return;
+        }
+        if (y0 == y1) {
+            for (int x = x0; x <= x1; ++x)
+                setPixel(color, x, y0, arr, width, height);
+            return;
+        }
+        int dx = ABS(x1 - x0);
+        int sx = x0 < x1 ? 1 : -1;
+        int dy = -abs(y1 - y0);
+        int sy = y0 < y1 ? 1 : -1;
+        int error = dx + dy;
+
+        while (true) {
+            setPixel(color, x0, y0, arr, width, height);
+            if (x0 == x1 && y0 == y1)
+                break;
+            int e2 = 2 * error;
+            if (e2 >= dy) {
+                if (x0 == x1)
+                    break;
+                error = error + dy;
+                x0 = x0 + sx;
+            }
+            if (e2 <= dx) {
+                if (y0 == y1)
+                    break;
+                error = error + dx;
+                y0 = y0 + sy;
+            }
+        }
+    }
+
+    static uint8_t getMonoBitmapBitValue(uint32_t pixelNumber, const uint8_t *bmpMonoSource)
+    {
+        uint32_t byteNumber = pixelNumber / 8;
+        uint8_t byte = *(bmpMonoSource + byteNumber);
+        uint32_t bitNumber = 7 - (pixelNumber - byteNumber * 8);
+        byte >>= bitNumber;
+        byte &= 0x01; // выделить значение пиксела
+        return byte;
     }
 
     /**
-     * @param useRAMContent true: Resume to RAM content display (RESET) Output follows RAM content;
-     *                      false: Entire display ON, Output ignores RAM content
-
+     * Рисует строку в битмапе.
+     *
+     * @param fontData Битмапы букв шрифта. Шрифт может быть любого размера.
+     *        Кодируется побитово: 1 - есть окраска, 0 - не окрашено.
+     *        Буква выравнивается до байта, например, буква в 12 пикселей
+     *        по ширине и 18 в высоту займёт 2 байта по ширине и 18 по высоте.
+     *        Буквы рисуются как есть, сверху вниз без разворотов,
+     *        незанятые биты заполняются нулями.
      */
-    bool on(bool useRAMContent)
+    static void drawString(uint32_t color, int left, int top, const char *s,
+            const uint8_t *fontData, int symbolWidth, int symbolHeight,
+            uint8_t *dest, int width, int height)
     {
-        return TInterfaceClient::write(useRAMContent ?
-                SSD1306Command::DISPLAY_ON_RESUME_TO_RAM :
-                SSD1306Command::DISPLAY_ON_IGNORE_RAM);
+        int x = left;
+        int y = top;
+        UARTLogger logger(&huart2);
+        while (char ch = *s++) {
+            int charIndex = ch;
+            int bitmapStartPixel = charIndex * symbolWidth * symbolHeight;
+            int i = bitmapStartPixel;
+            for (int r = 0; r < symbolHeight; ++r) {
+                for (int c = 0; c < symbolWidth; ++c, ++i) {
+                    uint32_t byteNumber = i / 8;
+                    uint32_t bitNumber = 7 - (i - byteNumber * 8);
+                    uint8_t byte = fontData[byteNumber];
+                    byte >>= bitNumber;
+                    byte &= 1;
+                    if (byte)
+                        setPixel(color, x + c, y + r, dest, width, height);
+                    logger.write("%c", byte ? '1' : '0');
+                }
+                logger.write("\r\n");
+            }
+            logger.write("\r\n");
+            x += symbolWidth;
+        }
     }
 
-    inline bool sendCommand(uint8_t* data, uint32_t size)
+    static void drawString(uint32_t color, int left, int top, const char *s,
+            const uint8_t *fontData, const uint8_t *remapFontArray,
+            uint32_t remapCharCount,
+            int symbolWidth, int symbolHeight,
+            uint8_t *dest, int width, int height)
     {
-        return TInterfaceClient::memWrite(0, 8, data, size);
+        int x = left;
+        int y = top;
+        UARTLogger logger(&huart2);
+        while (char ch = *s++) {
+            int charIndex = ch;
+            uint8_t *pfind = (uint8_t *)std::bsearch(&charIndex, remapFontArray, remapCharCount, sizeof(uint8_t),
+                    [](void const *lhs, void const *rhs) { return *(uint8_t*)lhs - *(uint8_t*)rhs; });
+            if (!pfind)
+                continue;
+            charIndex = pfind - remapFontArray;
+            int bitmapStartPixel = charIndex * symbolWidth * symbolHeight;
+            int i = bitmapStartPixel;
+            for (int r = 0; r < symbolHeight; ++r) {
+                for (int c = 0; c < symbolWidth; ++c, ++i) {
+                    uint32_t byteNumber = i / 8;
+                    uint32_t bitNumber = 7 - (i - byteNumber * 8);
+                    uint8_t byte = fontData[byteNumber];
+                    byte >>= bitNumber;
+                    byte &= 1;
+                    if (byte)
+                        setPixel(color, x + c, y + r, dest, width, height);
+                    logger.write("%c", byte ? '1' : '0');
+                }
+                logger.write("\r\n");
+            }
+            logger.write("\r\n");
+            x += symbolWidth;
+        }
     }
-
-    inline bool sendCommand(uint8_t data)
+    /**
+     * Draws the bitmap
+     *
+     * @param bmpMonoSource монохромный битмап (1 бит на пиксель) в нормальном человеческом представлении,
+     *                      т.е. по строкам и по столбцам, как если бы это
+     *                      была обычная картинка (не постранично и не повёрнуто,
+     *                      как в этом дисплее).
+     *                      Можно нарисовать в Calc или Excel с помощью 0 и 1
+     *                      нужный битмап, а затем последовательно соединить всё в одну строку,
+     *                      разбить по 8 цифр и дополнить справа до 8.
+     */
+    static void drawBitmap(int xdest, int ydest, uint8_t *bmpMonoSource,
+            int bmpWidth, int bmpHeight,
+            uint8_t *dest, int width, int height,
+            RasterOpCode opCode)
     {
-        return TInterfaceClient::memWrite(0, 8, &data, sizeof(data));
-    }
-
-    inline bool sendCommand(uint8_t cmd, uint8_t data)
-    {
-        uint8_t c[2] = {cmd, data};
-        return TInterfaceClient::memWrite(0, 8, c, sizeof(data));
-    }
-
-    bool sendData(const uint8_t* data, uint32_t size)
-    {
-        // 0x40 - начало блока RAM в дисплее
-        return TInterfaceClient::memWrite(0x40, 8, data, size);// or interrupt
+        if (xdest >= width || ydest >= height)
+            return;
+        int right = MIN(width, xdest + MIN(bmpWidth, width));
+        int bottom = MIN(height, ydest + MIN(bmpHeight, height));
+        uint32_t pixelNumber = 0;
+        int ySrc = 0, x = 0, y = 0;
+        uint32_t color = 0, prevColor = 0;
+        switch (opCode) {
+        case RasterOpCode::SRCCOPY: {
+            for (y = ydest, ySrc = 0; y < bottom; ++y, ++ySrc) {
+                pixelNumber = ySrc * bmpWidth;
+                for (x = xdest; x < right; ++x, ++pixelNumber) {
+                    uint8_t byte = getMonoBitmapBitValue(pixelNumber, bmpMonoSource);
+                    color = byte ? 0xFFFFFFFF : 0;
+                    setPixel(color, x, y, dest, width, height);
+                }
+            }
+        }
+        break;
+        case RasterOpCode::SRCAND: {
+            for (y = ydest, ySrc = 0; y < bottom; ++y, ++ySrc) {
+                pixelNumber = ySrc * bmpWidth;
+                for (x = xdest; x < right; ++x, ++pixelNumber) {
+                    uint8_t byte = getMonoBitmapBitValue(pixelNumber, bmpMonoSource);
+                    color = byte ? 0xFFFFFFFF : 0;
+                    prevColor = getPixel(x, y, dest, width, height);
+                    setPixel(color & prevColor, x, y, dest, width, height);
+                }
+            }
+        }
+        break;
+        case RasterOpCode::SRCOR: {
+            for (y = ydest, ySrc = 0; y < bottom; ++y, ++ySrc) {
+                pixelNumber = ySrc * bmpWidth;
+                for (x = xdest; x < right; ++x, ++pixelNumber) {
+                    uint8_t byte = getMonoBitmapBitValue(pixelNumber, bmpMonoSource);
+                    color = byte ? 0xFFFFFFFF : 0;
+                    prevColor = getPixel(x, y, dest, width, height);
+                    setPixel(color | prevColor, x, y, dest, width, height);
+                }
+            }
+        }
+        break;
+        case RasterOpCode::SRCXOR: {
+            for (y = ydest, ySrc = 0; y < bottom; ++y, ++ySrc) {
+                pixelNumber = ySrc * bmpWidth;
+                for (x = xdest; x < right; ++x, ++pixelNumber) {
+                    uint8_t byte = getMonoBitmapBitValue(pixelNumber, bmpMonoSource);
+                    color = byte ? 0xFFFFFFFF : 0;
+                    prevColor = getPixel(x, y, dest, width, height);
+                    setPixel(color ^ prevColor, x, y, dest, width, height);
+                }
+            }
+        }
+        break;
+        } // switch
     }
 };
 
