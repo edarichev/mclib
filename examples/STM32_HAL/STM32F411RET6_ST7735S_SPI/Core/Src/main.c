@@ -117,18 +117,24 @@ int main(void)
         .CS_Pin = GPIO_PIN_12,
     };
     ST7735S display(&spi, params);
+    display.setColorMode(ST7735ColorMode::ColorMode16);
     display.init();
-#define ST7735_COLOR_RED                                                0xF800
-#define ST7735_COLOR_GREEN                                              0x07E0
-#define ST7735_COLOR_BLUE                                               0x001F
-#define ST7735_COLOR_YELLOW                                             0xFFE0
-#define ST7735_COLOR_WHITE                                              0xFFFF
-#define ST7735_COLOR_BLACK                                              0x0000
-#define ST7735_COLOR_ORANGE                                             0xFA20
 #define ST7735_X_SIZE                                                   128
 #define ST7735_Y_SIZE                                                   160
 
   /* USER CODE END 2 */
+    //display.drawRect(0, 0, ST7735_X_SIZE, ST7735_Y_SIZE, ST7735_COLOR_RED);
+    /*for (int i = 0; i < 14; i += 2) {
+        display.drawRectangle(ST7735_COLOR_RED, i * 10, 0, 10, 160);
+        display.drawRectangle(ST7735_COLOR_BLUE, (i + 1) * 10, 0, 10, 160);
+    }*/
+
+    display.fillRectangle(ST7735_COLOR_16(0, 0xFF, 0xFF), 0, 0, ST7735_X_SIZE, ST7735_Y_SIZE);
+    for (uint16_t x = 0; x < 100; ++x) {
+        display.setPixel(ST7735_COLOR_16(0xFF, 0xFF, 0), x, x);
+    }
+
+    display.drawLine(ST7735_COLOR_16(0xFF, 0, 0), 15, 0, 45, 160);
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -136,20 +142,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-        display.drawRect(0, 0, ST7735_X_SIZE, ST7735_Y_SIZE, ST7735_COLOR_RED);
-        Delay::wait(1000);
-        display.drawRect(0, 0, ST7735_X_SIZE, ST7735_Y_SIZE, ST7735_COLOR_GREEN);
-        Delay::wait(1000);
-        display.drawRect(0, 0, ST7735_X_SIZE, ST7735_Y_SIZE, ST7735_COLOR_BLUE);
-        Delay::wait(1000);
-        display.drawRect(0, 0, ST7735_X_SIZE, ST7735_Y_SIZE, ST7735_COLOR_YELLOW);
-        Delay::wait(1000);
-        display.drawRect(0, 0, ST7735_X_SIZE, ST7735_Y_SIZE, ST7735_COLOR_WHITE);
-        Delay::wait(1000);
-        display.drawRect(0, 0, ST7735_X_SIZE, ST7735_Y_SIZE, ST7735_COLOR_BLACK);
-        Delay::wait(1000);
-        display.drawRect(0, 0, ST7735_X_SIZE, ST7735_Y_SIZE, ST7735_COLOR_ORANGE);
-        Delay::wait(1000);
     }
   /* USER CODE END 3 */
 }

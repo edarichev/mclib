@@ -463,7 +463,6 @@ private:
     {
         int x = left;
         int y = top;
-        UARTLogger logger(&huart2);
         while (char ch = *s++) {
             int charIndex = ch;
             int bitmapStartPixel = charIndex * symbolWidth * symbolHeight;
@@ -477,11 +476,8 @@ private:
                     byte &= 1;
                     if (byte)
                         setPixel(color, x + c, y + r, dest, width, height);
-                    logger.write("%c", byte ? '1' : '0');
                 }
-                logger.write("\r\n");
             }
-            logger.write("\r\n");
             x += symbolWidth;
         }
     }
@@ -494,7 +490,6 @@ private:
     {
         int x = left;
         int y = top;
-        UARTLogger logger(&huart2);
         while (char ch = *s++) {
             int charIndex = ch;
             uint8_t *pfind = (uint8_t *)std::bsearch(&charIndex, remapFontArray, remapCharCount, sizeof(uint8_t),
@@ -513,11 +508,8 @@ private:
                     byte &= 1;
                     if (byte)
                         setPixel(color, x + c, y + r, dest, width, height);
-                    logger.write("%c", byte ? '1' : '0');
                 }
-                logger.write("\r\n");
             }
-            logger.write("\r\n");
             x += symbolWidth;
         }
     }

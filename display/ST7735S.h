@@ -5,10 +5,26 @@
 #ifndef _ST7735S_H_INCLUDED_
 #define _ST7735S_H_INCLUDED_
 
+#include <cmath>
+#include <cstdlib>
 #include "../spiclient.h"
 #include "../delay.h"
 #include "../xuart.h"
 
+enum class ST7735ColorMode : uint8_t {
+    ColorMode12 = 0b011,
+    ColorMode16 = 0b101,
+    ColorMode18 = 0b110,
+};
+
+
+// 1111'1111'1111
+#define ST7735_COLOR_CR4(x) ((uint32_t)(0xFF & (x)) * 0b1111 / 256)
+#define ST7735_COLOR_CR5(x) ((uint32_t)(0xFF & (x)) * 0b11111 / 256)
+#define ST7735_COLOR_CR6(x) ((uint32_t)(0xFF & (x)) * 0b111111 / 256)
+#define ST7735_COLOR_12(r8, g8, b8) (uint32_t) ((ST7735_COLOR_CR4((r8)) << 8) | (ST7735_COLOR_CR4((g8)) << 4) | (ST7735_COLOR_CR4((b8))))
+#define ST7735_COLOR_16(r8, g8, b8) (uint32_t) ((ST7735_COLOR_CR5((r8)) << 11) | (ST7735_COLOR_CR6((g8)) << 5) | (ST7735_COLOR_CR5((b8))))
+#define ST7735_COLOR_18(r8, g8, b8) (uint32_t) ((ST7735_COLOR_CR6((r8)) << 12) | (ST7735_COLOR_CR6((g8)) << 6) | (ST7735_COLOR_CR6((b8))))
 
 struct SPIConnectionParams
 {
@@ -126,19 +142,15 @@ public:
         RAMWR = 0x2C,
     };
 
-    void selectDevice()
-    {
-        pinReset(_params.CS_PORT, _params.CS_Pin);
-    }
+    ST7735ColorMode _colorMode = ST7735ColorMode::ColorMode16;
 
-    void unselectDevice()
+    void setColorMode(ST7735ColorMode cm)
     {
-        pinSet(_params.CS_PORT, _params.CS_Pin);
+        _colorMode = cm;
     }
 
     void init()
     {
-        selectDevice();
         pinSet(_params.RS_PORT, _params.RS_Pin);
         Delay::wait(5);
         pinReset(_params.RS_PORT, _params.RS_Pin);
@@ -146,109 +158,57 @@ public:
         pinSet(_params.RS_PORT, _params.RS_Pin);
         Delay::wait(5);
 
-        if (!sendCommand(ST7735Command::SWRESET))
-            logger.writeLine("SWRESET");
+        sendCommand(ST7735Command::SWRESET);
         Delay::wait(150);
-        if (!sendCommand(ST7735Command::SLPOUT))
-            logger.writeLine("SLPOUT");
+        sendCommand(ST7735Command::SLPOUT);
         Delay::wait(500);
-        if (!sendCommand(ST7735Command::FRMCTR1))
-            logger.writeLine("FRMCTR1");
+        sendCommand(ST7735Command::FRMCTR1);
         uint8_t frmctr[] = {0x01, 0x2C, 0x2D};
-        //sendData(0x01);
-        //sendData(0x2C);
-        //sendData(0x2D);
-        if (!sendData(frmctr, sizeof(frmctr)))
-            logger.writeLine("frmctr");
+        sendData(frmctr, sizeof(frmctr));
         sendCommand(ST7735Command::FRMCTR2);
-        //sendData(0x01);
-        //sendData(0x2C);
-        //sendData(0x2D);
         sendData(frmctr, sizeof(frmctr));
         sendCommand(ST7735Command::FRMCTR3);
-//        sendData(0x01);
-//        sendData(0x2C);
-//        sendData(0x2D);
-//        sendData(0x01);
-//        sendData(0x2C);
-//        sendData(0x2D);
         sendData(frmctr, sizeof(frmctr));
         sendData(frmctr, sizeof(frmctr));
         sendCommand(ST7735Command::INVCTR);
         sendData(0x07);
         sendCommand(ST7735Command::PWCTR1);
         uint8_t pwctr1[] = {0xA2, 0x02, 0x84};
-//        sendData(0xA2);
-//        sendData(0x02);
-//        sendData(0x84);
         sendData(pwctr1, sizeof(pwctr1));
         sendCommand(ST7735Command::PWCTR2);
         sendData(0xC5);
         sendCommand(ST7735Command::PWCTR3);
         uint8_t pwctr3[] = {0x0A, 0};
-//        sendData(0x0A);
-//        sendData(0x00);
         sendData(pwctr3, sizeof(pwctr3));
         sendCommand(ST7735Command::PWCTR4);
         uint8_t pwctr4[] = {0x8A, 0x2A};
-//        sendData(0x8A);
-//        sendData(0x2A);
         sendData(pwctr4, sizeof(pwctr4));
         sendCommand(ST7735Command::PWCTR5);
         uint8_t pwctr5[] = {0x8A, 0xEE};
-//        sendData(0x8A);
-//        sendData(0xEE);
         sendData(pwctr5, sizeof(pwctr5));
         sendCommand(ST7735Command::VMCTR1);
         sendData(0x0E);
         sendCommand(ST7735Command::INVOFF);
         sendCommand(ST7735Command::MADCTL);
         sendData(0xC0);
+//        011 12-bit/pixel
+//        101 16-bit/pixel
+//        110 18-bit/pixel
+//        12 битов на пиксель = 4 бита красный (R) + 4 бита зеленый (G) + 4 бита синий (B)
+//        16 битов на пиксель = 5 битов красный (R) + 6 битов зеленый (G) + 5 битов синий (B)
+//        18 битов на пиксель = 6 битов красный (R) + 6 битов зеленый (G) + 6 битов синий (B)
         sendCommand(ST7735Command::COLMOD);
-        sendData(0x05);
+        sendData((uint8_t)_colorMode);
         sendCommand(ST7735Command::GMCTRP1);
         uint8_t gmctrp1[] = {0x02, 0x1c, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2d, 0x29, 0x25, 0x2b, 0x39, 0x00, 0x01, 0x03, 0x10};
-//        sendData(0x02);
-//        sendData(0x1c);
-//        sendData(0x07);
-//        sendData(0x12);
-//        sendData(0x37);
-//        sendData(0x32);
-//        sendData(0x29);
-//        sendData(0x2d);
-//        sendData(0x29);
-//        sendData(0x25);
-//        sendData(0x2B);
-//        sendData(0x39);
-//        sendData(0x00);
-//        sendData(0x01);
-//        sendData(0x03);
-//        sendData(0x10);
         sendData(gmctrp1, sizeof(gmctrp1));
         sendCommand(ST7735Command::GMCTRN1);
         uint8_t gmctrn1[] = {0x03, 0x1d, 0x07, 0x06, 0x2E, 0x2c, 0x29, 0x2d, 0x2e, 0x2e, 0x37, 0x3f, 0, 0, 0x02, 0x10};
-//        sendData(0x03);
-//        sendData(0x1d);
-//        sendData(0x07);
-//        sendData(0x06);
-//        sendData(0x2E);
-//        sendData(0x2C);
-//        sendData(0x29);
-//        sendData(0x2D);
-//        sendData(0x2E);
-//        sendData(0x2E);
-//        sendData(0x37);
-//        sendData(0x3F);
-//        sendData(0x00);
-//        sendData(0x00);
-//        sendData(0x02);
-//        sendData(0x10);
         sendData(gmctrn1, sizeof(gmctrn1));
         sendCommand(ST7735Command::NORON);
         Delay::wait(10);
         sendCommand(ST7735Command::DISPON);
         Delay::wait(100);
-        unselectDevice();
     }
 
 #if defined(PLATFORM_STM32_HAL)
@@ -280,9 +240,17 @@ public:
         return TInterfaceClient::write(data, size);
     }
 
+    // по краям экрана шум
+    static const constexpr int COLUMN_OFFSET = 2;
+    static const constexpr int ROW_OFFSET = 1;
+    static const constexpr int Width = 128;
+    static const constexpr int Height = 160;
+
     void setColAddr(uint16_t cStart, uint16_t cStop)
     {
         uint8_t data[4];
+        cStart += COLUMN_OFFSET;
+        cStop += COLUMN_OFFSET;
 
         data[0] = (cStart & 0xFF00) >> 8;
         data[1] = cStart & 0x00FF;
@@ -296,7 +264,8 @@ public:
     void setRowAddr(uint16_t rStart, uint16_t rStop)
     {
         uint8_t data[4];
-
+        rStart += ROW_OFFSET;
+        rStop += ROW_OFFSET;
         data[0] = (rStart & 0xFF00) >> 8;
         data[1] = rStart & 0x00FF;
         data[2] = (rStop & 0xFF00) >> 8;
@@ -305,28 +274,74 @@ public:
         sendData(data, 4);
     }
 
-    void drawRect(uint16_t cStart, uint16_t rStart, uint16_t cStop,
-            uint16_t rStop, uint16_t color)
+    void drawLine(uint32_t color, int x0, int y0, int x1, int y1)
     {
-        selectDevice();
-        setColAddr(cStart, cStop - 1);
-        setRowAddr(rStart, rStop - 1);
+        if (x0 == x1) {
+            for (int y = y0; y <= y1; ++y)
+                setPixel(color, x0, y);
+            return;
+        }
+        if (y0 == y1) {
+            for (int x = x0; x <= x1; ++x)
+                setPixel(color, x, y0);
+            return;
+        }
+        int dx = abs(x1 - x0);
+        int sx = x0 < x1 ? 1 : -1;
+        int dy = -abs(y1 - y0);
+        int sy = y0 < y1 ? 1 : -1;
+        int error = dx + dy;
+
+        while (true) {
+            setPixel(color, x0, y0);
+            if (x0 == x1 && y0 == y1)
+                break;
+            int e2 = 2 * error;
+            if (e2 >= dy) {
+                if (x0 == x1)
+                    break;
+                error = error + dy;
+                x0 = x0 + sx;
+            }
+            if (e2 <= dx) {
+                if (y0 == y1)
+                    break;
+                error = error + dx;
+                y0 = y0 + sy;
+            }
+        }
+    }
+
+    void setPixel(uint32_t color, int x, int y)
+    {
+        if (x < 0 || x >= Width || y < 0 || y >= Height)
+            return;
+        setColAddr(x, x+1);
+        setRowAddr(y, y+1);
+
+        sendCommand(ST7735Command::RAMWR);
+        uint8_t colorBytes[2];
+        colorBytes[0] = (color & 0xFF00) >> 8;
+        colorBytes[1] = color & 0x00FF;
+        sendData(colorBytes, 2);
+    }
+
+    void fillRectangle(uint32_t color, uint16_t x, uint16_t y,
+            uint16_t width, uint16_t height)
+    {
+        setColAddr(x, x + width - 1);
+        setRowAddr(y, y + height - 1);
 
         sendCommand(ST7735Command::RAMWR);
 
-        uint32_t size = (cStop - cStart) * (rStop - rStart);
+        uint32_t size = width * height;
         uint8_t colorBytes[2];
         colorBytes[0] = (color & 0xFF00) >> 8;
         colorBytes[1] = color & 0x00FF;
 
-        pinSet(_params.DC_PORT, _params.DC_Pin);
-
         for (uint32_t i = 0; i < size; i++) {
-            //sendData(colorBytes[0]);
-            //sendData(colorBytes[1]);
             sendData(colorBytes, 2);
         }
-        unselectDevice();
     }
 };
 
