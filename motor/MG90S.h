@@ -83,7 +83,7 @@ public:
     /**
      * Определяет время вращения по ч.с. с заданной скоростью
      *
-     * @param arrValue значение для установки в CCR регистр
+     * @param ccrValue значение для установки в CCR регистр
      */
     void getRotateTimeCW(float degreesPerSecond, float degreesToRotate,
             /*out*/ uint32_t timeMsToRotate,
@@ -103,7 +103,7 @@ public:
     /**
      * Определяет время вращения против ч.с. с заданной скоростью
      *
-     * @param arrValue значение для установки в CCR регистр
+     * @param ccrValue значение для установки в CCR регистр
      */
     void getRotateTimeCCW(float degreesPerSecond, float degreesToRotate,
             /*out*/ uint32_t &timeMsToRotate,

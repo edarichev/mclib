@@ -10,7 +10,6 @@
 
 #include <delay.h>
 #include <i2cclient.h>
-#include <spiclient.h>
 #include <type_traits>
 #include <limits>
 
@@ -219,15 +218,6 @@ public:
 	BMP280Impl(typename U::InterfacePtrType i2c,
 			BMP280I2CAddress addr = BMP280I2CAddress::SDOToGND) :
 			TInterfaceClient(i2c, (uint16_t) addr)
-	{
-
-	}
-
-	// Constructor for SPI-based clients
-	template<typename U = TInterfaceClient, std::enable_if_t<
-			std::is_base_of<SPIClientBase, U>::value, bool> = true>
-	BMP280Impl(typename U::InterfacePtrType spi) :
-			TInterfaceClient(spi)
 	{
 
 	}
@@ -663,14 +653,6 @@ protected:
 		return true;
 	}
 
-	template<typename TIntClient = TInterfaceClient, std::enable_if_t<
-				std::is_base_of<SPIClientBase, TIntClient>::value, bool> = true>
-	bool readDataRegisters(uint8_t *buf, uint8_t size)
-	{
-		// TODO: SPI
-		return false;
-	}
-
 	// protocol-specific reading compensations: I2C
 	template <typename TIntClient = TInterfaceClient,
 			std::enable_if_t<
@@ -686,14 +668,6 @@ protected:
 			return false;
 		}
 		return true;
-	}
-
-	template<typename TIntClient = TInterfaceClient, std::enable_if_t<
-			std::is_base_of<SPIClientBase, TIntClient>::value, bool> = true>
-	bool readCCRegisters(uint8_t *buf, uint8_t size)
-	{
-		// TODO: SPI
-		return false;
 	}
 
 	bool readCompensationCoefficients()
@@ -804,15 +778,6 @@ protected:
 	}
 
 	template<uint8_t registry, typename TIntClient = TInterfaceClient, std::enable_if_t<
-			std::is_base_of<SPIClientBase, TIntClient>::value, bool> = true>
-	inline bool setRegistry(uint8_t newValue)
-	{
-		_error = BMP280Error::OK;
-		// TODO: after buying the new sensor
-		return true;
-	}
-
-	template<uint8_t registry, typename TIntClient = TInterfaceClient, std::enable_if_t<
 			std::is_base_of<I2CClientBase, TIntClient>::value, bool> = true>
 	inline bool getRegistry(uint8_t &outValue)
 	{
@@ -826,25 +791,6 @@ protected:
 			return false;
 		}
 		return true;
-	}
-
-	template<uint8_t registry, typename TIntClient = TInterfaceClient, std::enable_if_t<
-			std::is_base_of<SPIClientBase, TIntClient>::value, bool> = true>
-	inline bool getRegistry(uint8_t &outValue)
-	{
-		_error = BMP280Error::OK;
-		outValue = 0;
-		TInterfaceClient::selectDevice();
-		bool ok = TInterfaceClient::writeRead(registry, outValue);
-		if (!ok) {
-			_error = queryRegistryErrorCode<CHIP_ID_REGISTRY>();
-		} else {
-			ok = TInterfaceClient::writeRead(registry, outValue);
-			if (!ok)
-				_error = readRegistryErrorCode<CHIP_ID_REGISTRY>();
-		}
-		TInterfaceClient::unselectDevice();
-		return ok;
 	}
 
 	// The next functions are from BMP280 datasheet as is.
@@ -984,13 +930,6 @@ public:
 
 	}
 
-	// Constructor for SPI-based clients
-	template<typename U = TInterfaceClient, std::enable_if_t<
-			std::is_base_of<SPIClientBase, U>::value, bool> = true>
-	BME280Impl(typename U::InterfacePtrType spi) : BaseClass(spi)
-	{
-
-	}
 protected:
 	// Returns temperature in DegC, resolution is 0.01 DegC. Output value of “5123” equals 51.23 DegC.
 	// t_fine carries fine temperature as global value
