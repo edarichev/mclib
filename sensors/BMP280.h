@@ -910,6 +910,7 @@ protected:
  * BME280 Sensor
  *
  * The next references are applied to BME280 datasheet
+ * TODO: check after buying
  */
 template <class TInterfaceClient = I2CPollingClient, class CDATA = BME280CDATA>
 class BME280Impl : public BMP280Impl<TInterfaceClient, CDATA>
@@ -1018,110 +1019,5 @@ protected:
 using BMP280 = BMP280Impl<I2CClientImpl<I2CPollingModeMaster>>;
 using BME280 = BME280Impl<I2CClientImpl<I2CPollingModeMaster>>;
 
-#if 0
-class BMP280
-{
-	BMP280CDATA cdata {};
-	// All values are sets to 0 when reset (see 4.2 Memory map at page 24)
-	mutable uint32_t _lastUpdateTime = 0;
-	bool _initialized = false;
-	bool _initStarted = false;
-	mutable BMP280Error _error = BMP280Error::NotInitialized;
-	BMP280IIRFilterMode _filterMode = BMP280IIRFilterMode::FilterOff;
-	BMP280PowerMode _mode = BMP280PowerMode::Sleep;
-	BMP280PressureOversampling _pressureOversampling = BMP280PressureOversampling::Skipped;
-	BMP280TemperatureOversampling _temperatureOversampling = BMP280TemperatureOversampling::Skipped;
-	BMP280StandbyTime _standbyTime = BMP280StandbyTime::Standby_0_5;
-public:
-	BMP280(I2CPollingModeMaster *i2c)
-	{
-
-	}
-	bool ready()
-	{
-		return true;
-	}
-	uint8_t error()
-	{
-		return 0;
-	}
-	/**
-	 * Returns the pressure value as floating point: 759.67
-	 */
-	template <class TReturnType, std::enable_if_t<std::is_floating_point<TReturnType>::value, bool> = true>
-	static TReturnType mmhg(uint32_t pa) {
-		return (TReturnType)pa / 133.322387415f;
-	}
-
-	/**
-	 * Returns the pressure value as mm hg in integer XXXYY format,
-	 * where YY - two digits after comma: 75967 -> 759.67
-	 */
-	template <class TReturnType, std::enable_if_t<std::is_integral<TReturnType>::value, bool> = true>
-	static TReturnType mmhg(uint32_t pa) {
-		return (TReturnType) ((float)pa / 133.322387415f) * 100;
-	}
-	bool setIIRFilter(BMP280IIRFilterMode m)
-	{
-		return true;
-	}
-
-	bool setStandbyTime(BMP280StandbyTime t)
-	{
-
-		return true;
-
-	}
-
-	bool setOversamplingRegistry(BMP280TemperatureOversampling t,
-			BMP280PressureOversampling p, BMP280PowerMode m)
-	{
-		return true;
-	}
-
-	bool setTemperatureOversampling(BMP280TemperatureOversampling value)
-	{
-
-		return true;
-	}
-
-	bool setPressureOversampling(BMP280PressureOversampling value)
-	{
-
-		return true;
-	}
-
-	bool setPowerMode(BMP280PowerMode value)
-	{
-
-		return true;
-	}
-
-
-	/**
-	 * Returns the chip ID
-	 *
-	 * The “id” register contains the chip identification number chip_id[7:0],
-	 * which is 0x58. This number can be read as soon as the device finished
-	 * the power-on-reset. (page 24)
-	 *
-	 * @returns The chip ID (0x58) or 0xFF if error was occurred.
-	 */
-	uint8_t chipId()
-	{
-		return 0x58;
-	}
-	bool readData(int32_t &outTemperature, uint32_t &outPressure)
-	{
-		outTemperature = 0;
-		outPressure = 0;
-		return true;
-	}
-	bool init()
-	{
-		return true;
-	}
-};
-#endif
 
 #endif // _BMP280_H_INCLUDED_
